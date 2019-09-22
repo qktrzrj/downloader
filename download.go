@@ -1,10 +1,13 @@
 package main
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
 	browser "github.com/EDDYCJY/fake-useragent"
 	"github.com/valyala/fasthttp"
+	"io"
+	"strings"
 )
 
 func Download(url string) error {
@@ -26,6 +29,19 @@ func Download(url string) error {
 		return errors.New("连接失败！")
 	}
 	// 创建文件
-
-	return nil
+	u := []byte(url)
+	fullName := ""
+	s := strings.LastIndex(url, "/")
+	if s == -1 {
+		s = 0
+		fullName = string(u[s:])
+	} else {
+		fullName = string(u[s+1:])
+	}
+	file, err := creatFile("./" + fullName)
+	if err != nil {
+		return fmt.Errorf("创建文件失败:%w", err)
+	}
+	_, err = io.Copy(file, bytes.NewReader(resp.Body()))
+	return err
 }
