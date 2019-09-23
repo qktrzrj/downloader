@@ -3,17 +3,20 @@ package main
 import (
 	"fmt"
 	"github.com/valyala/fasthttp"
+	"sync"
 	"yan.com/downloader/models"
 )
 
 const (
 	maxSize     int = 3
-	maxTaskSize int = 10
+	maxTaskSize int = 15
 )
 
 var (
+	activeLock    = sync.Mutex{}
+	lock          = sync.Mutex{}
 	taskMap       = make(map[string][]task)
-	activeTaskMap = make(map[string][maxTaskSize]int)
+	activeTaskMap = make(map[string][]int)
 )
 
 type task struct {
@@ -33,24 +36,16 @@ func addTask(filePath string, segment models.SegMent) {
 	taskList := taskMap[filePath]
 	taskList = append(taskList, newTask)
 	taskMap[filePath] = taskList
-}
-
-func initTask() {
-	count := 0
-	for index, fileInfo := range fileList {
-		activeTaskList := activeTaskMap[fileInfo.FilePath]
-		if count >= maxTaskSize {
-			break
-		}
-		activeTaskList[count] = index
-		count++
+	activeTaskList := activeTaskMap[filePath]
+	if len(activeTaskList) < maxTaskSize-1 {
+		activeLock.Lock()
+		activeTaskList = append(activeTaskList)
 	}
 }
 
-func startTask() {
-	initTask()
+func startTask(filePath string) {
 	for {
-		for filePath, taskInfo := range activeTaskMap {
+		for filePath, taskInfo := range activeTaskMap[filePath] {
 			request := getRequest(fileInfo.Url, segment.Start, segment.End)
 			resp := &fasthttp.Response{}
 			ok := make(chan bool)

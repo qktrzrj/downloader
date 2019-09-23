@@ -8,6 +8,8 @@ import (
 	"yan.com/downloader/models"
 )
 
+var fileList []models.FileInfo = make([]models.FileInfo, 0)
+
 func isNotExist(filePath string) bool {
 	if _, err := os.Stat(filePath); os.IsNotExist(err) {
 		return true

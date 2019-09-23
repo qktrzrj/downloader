@@ -8,8 +8,6 @@ import (
 	"yan.com/downloader/models"
 )
 
-var fileList []models.FileInfo = make([]models.FileInfo, 0)
-
 func getFileInfo(url string) (models.FileInfo, error) {
 	// 请求目标文件信息
 	resp := &fasthttp.Response{}
