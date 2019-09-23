@@ -1,47 +1,52 @@
 package main
 
 import (
-	"bytes"
-	"errors"
 	"fmt"
-	browser "github.com/EDDYCJY/fake-useragent"
 	"github.com/valyala/fasthttp"
-	"io"
-	"strings"
+	"sync"
+	"time"
+	"yan.com/downloader/models"
 )
 
-func Download(url string) error {
-	// 构建请求头
-	head := fasthttp.RequestHeader{}
-	head.SetRequestURI(url)
-	head.SetUserAgent(browser.Chrome())
-	head.SetMethod("GET")
-	request := &fasthttp.Request{
-		Header: head,
-	}
-	client := fasthttp.Client{}
-	resp := fasthttp.Response{}
-	err := client.Do(request, &resp)
+const segSize int = 1024 * 1024
+
+var (
+	seg    = make(map[string][]models.SegMent)
+	client fasthttp.Client
+	group  sync.WaitGroup
+)
+
+func download(url string) error {
+	// 获取目标文件信息
+	fileInfo, err := getFileInfo(url)
 	if err != nil {
-		return fmt.Errorf("获取下载连接失败:%w", err)
+		return fmt.Errorf("获取目标文件信息失败: %w", err)
 	}
-	if resp.StatusCode() != 200 {
-		return errors.New("连接失败！")
+
+	group.Add(1)
+	go downloadDirect(fileInfo)
+	getRate(fileInfo, time.Now())
+	group.Wait()
+	return nil
+
+}
+
+func downloadDirect(fileInfo models.FileInfo) {
+	segment := models.SegMent{
+		Start:    0,
+		End:      fileInfo.Length - 1,
+		Url:      fileInfo.Url,
+		Count:    0,
+		Index:    0,
+		Complete: false,
 	}
-	// 创建文件
-	u := []byte(url)
-	fullName := ""
-	s := strings.LastIndex(url, "/")
-	if s == -1 {
-		s = 0
-		fullName = string(u[s:])
-	} else {
-		fullName = string(u[s+1:])
+	// 如果文件不支持断点续传，将不进行下载重试
+	if !fileInfo.Renewal {
+		segment.Count = 2
 	}
-	file, err := creatFile("./" + fullName)
-	if err != nil {
-		return fmt.Errorf("创建文件失败:%w", err)
-	}
-	_, err = io.Copy(file, bytes.NewReader(resp.Body()))
-	return err
+	segList := make([]models.SegMent, 0)
+	seg[fileInfo.FilePath] = append(segList, segment)
+	go startBT(fileInfo, 0)
+	// 开启任务
+
 }

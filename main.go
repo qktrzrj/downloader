@@ -1,8 +1,8 @@
 package main
 
 func main() {
-	url := "http://down.sandai.net/mac/thunder_3.3.7.4170.dmg"
-	err := Download(url)
+	url := "https://s3.amazonaws.com/SQLyog_Community/SQLyog+13.1.5/SQLyog-13.1.5-0.x64Community.exe"
+	err := download(url)
 	if err != nil {
 		panic(err)
 	}
