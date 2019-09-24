@@ -7,20 +7,36 @@ import (
 	"yan.com/downloader/models"
 )
 
-func getRate(fileInfo models.FileInfo, time time.Time) {
+func getRate(fileInfo models.FileInfo, t time.Time) {
 	for {
-		// 获取文件大小
-		size := getFileSize(fileInfo.FilePath)
-		percent := getPercent(size, int64(fileInfo.Length))
-		result, _ := strconv.Atoi(percent)
-		str := "working " + percent + "%" + "[" + bar(result, 100) + "] " + " " +
-			fmt.Sprintf("%.f", getCurrentSize(time)) + "s"
-		fmt.Printf("\r%s", str)
-		if size == int64(fileInfo.Length) {
-			fmt.Println("\n下载完成")
-			fileInfo.File.Close()
-			group.Done()
-			break
+		select {
+		case <-fileInfo.Exit:
+			fileInfo.TaskExit <- true
+			select {
+			case <-fileInfo.RateExit:
+				group.Done()
+				return
+			}
+		default:
+			// 获取已写入块总和大小
+			size := getFileSize(fileInfo.FilePath)
+			percent := getPercent(size, int64(fileInfo.Length))
+			result, _ := strconv.Atoi(percent)
+			str := "working " + percent + "%" + "[" + bar(result, 100) + "] " + " " +
+				fmt.Sprintf("%.f", getCurrentSize(t)) + "s"
+			fmt.Printf("\r%s", str)
+			if size >= int64(fileInfo.Length) {
+				fmt.Println("\n" + time.Now().String() + "下载完成")
+				//fileInfo.File.Close()
+				fileInfo.TaskExit <- true
+				select {
+				case <-fileInfo.RateExit:
+					fileInfo.File.Close()
+					fmt.Println("\n" + time.Now().String() + "关闭文件")
+					group.Done()
+					return
+				}
+			}
 		}
 	}
 }
@@ -44,7 +60,11 @@ func startBT(fileInfo models.FileInfo, index int) {
 		// 加入队列
 		addTask(fileInfo.FilePath, *segment)
 		startBT(fileInfo, index+1)
+		return
 	}
+	// 加入队列
+	addTask(fileInfo.FilePath, *segment)
+	return
 }
 
 func getPercent(a int64, b int64) string {

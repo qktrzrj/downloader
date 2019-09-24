@@ -5,6 +5,7 @@ import (
 	browser "github.com/EDDYCJY/fake-useragent"
 	"github.com/valyala/fasthttp"
 	"strings"
+	"sync"
 	"yan.com/downloader/models"
 )
 
@@ -33,24 +34,30 @@ func getFileInfo(url string) (models.FileInfo, error) {
 	if err != nil {
 		return models.FileInfo{}, err
 	}
+	//file.Close()
 	fileInfo := models.FileInfo{
-		Renewal:  renewal,
-		Length:   resp.Header.ContentLength(),
-		Url:      url,
-		FileName: file.Name(),
-		FilePath: "./" + file.Name(),
-		File:     file,
-		Exit:     make(chan bool),
-		Down:     true,
+		Renewal:   renewal,
+		Length:    resp.Header.ContentLength(),
+		Url:       url,
+		FileName:  file.Name(),
+		FilePath:  "./" + file.Name(),
+		File:      file,
+		Exit:      make(chan bool),
+		TaskExit:  make(chan bool),
+		RateExit:  make(chan bool),
+		Down:      true,
+		Lock:      sync.Mutex{},
+		Task:      sync.RWMutex{},
+		FileCache: make(map[int][]byte),
 	}
-	fileList = append(fileList, fileInfo)
+	fileMap[fileInfo.FilePath] = &fileInfo
 	return fileInfo, nil
 }
 
 func getHead(url string) *fasthttp.Request {
 	head := fasthttp.RequestHeader{}
 	head.SetRequestURI(url)
-	head.SetUserAgent(browser.Chrome())
+	head.SetUserAgent(browser.Random())
 	//head.Set(fasthttp.HeaderIfRange, "true")
 	head.SetMethod(fasthttp.MethodHead)
 	request := &fasthttp.Request{
@@ -62,7 +69,7 @@ func getHead(url string) *fasthttp.Request {
 func getRequest(url string, start int, end int) *fasthttp.Request {
 	head := fasthttp.RequestHeader{}
 	head.SetRequestURI(url)
-	head.SetUserAgent(browser.Chrome())
+	head.SetUserAgent(browser.Random())
 	head.SetByteRange(start, end)
 	head.SetMethod(fasthttp.MethodGet)
 	request := &fasthttp.Request{
@@ -71,7 +78,8 @@ func getRequest(url string, start int, end int) *fasthttp.Request {
 	return request
 }
 
-func send(req *fasthttp.Request, resp *fasthttp.Response, segment *models.SegMent, fileInfo models.FileInfo, ok *chan bool) {
+func send(req *fasthttp.Request, segment *models.SegMent, fileInfo *models.FileInfo) {
+	resp := &fasthttp.Response{}
 LOOP:
 	for {
 		err := client.Do(req, resp)
@@ -79,27 +87,12 @@ LOOP:
 			segment.Count++
 			if segment.Count >= 3 {
 				fileInfo.Exit <- true
-				break
+				return
 			}
 			break LOOP
 		}
-		err = writeFile(fileInfo, segment, resp.Body())
-		if err != nil {
-			segment.Count++
-			if segment.Count >= 3 {
-				fileInfo.Exit <- true
-				break
-			}
-			break LOOP
-		}
-		size := getFileSize(fileInfo.FilePath)
-		*ok <- true
-		if size == int64(fileInfo.Length) {
-			fmt.Println("\n下载完成")
-			fileInfo.File.Close()
-			fileInfo.Exit <- true
-			group.Done()
-			break
-		}
+		segment.Cache = resp.Body()
+		resp.ConnectionClose()
+		return
 	}
 }

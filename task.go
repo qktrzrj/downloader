@@ -1,67 +1,93 @@
 package main
 
 import (
-	"fmt"
-	"github.com/valyala/fasthttp"
 	"sync"
 	"yan.com/downloader/models"
 )
 
 const (
-	maxSize     int = 3
 	maxTaskSize int = 15
 )
 
 var (
-	activeLock    = sync.Mutex{}
-	lock          = sync.Mutex{}
-	taskMap       = make(map[string][]task)
-	activeTaskMap = make(map[string][]int)
+	//taskOver = make([]task, 0)
+	taskMap = make(map[string][]task)
+	//activeTaskMap = make(map[string]int)
 )
 
 type task struct {
-	filePath string
 	segIndex int
 	active   bool
 	cache    []byte
 }
 
 func addTask(filePath string, segment models.SegMent) {
+	index := segment.Index
 	newTask := task{
-		filePath: filePath,
-		segIndex: segment.Index,
+		segIndex: index,
 		active:   false,
 		cache:    nil,
 	}
-	taskList := taskMap[filePath]
+	taskList, _ := getTaskList(filePath)
 	taskList = append(taskList, newTask)
-	taskMap[filePath] = taskList
-	activeTaskList := activeTaskMap[filePath]
-	if len(activeTaskList) < maxTaskSize-1 {
-		activeLock.Lock()
-		activeTaskList = append(activeTaskList)
-	}
+	setTaskList(filePath, taskList)
 }
 
 func startTask(filePath string) {
-	for {
-		for filePath, taskInfo := range activeTaskMap[filePath] {
-			request := getRequest(fileInfo.Url, segment.Start, segment.End)
-			resp := &fasthttp.Response{}
-			ok := make(chan bool)
-			go send(request, resp, segment, fileInfo, &ok)
+	//activeTaskMap[filePath] = 0
+	taskGroup := sync.WaitGroup{}
+	taskSize := len(seg[filePath])
+	if taskSize > maxTaskSize {
+		taskSize = maxTaskSize
+	}
+	exit := make(chan bool, taskSize)
+	for i := 0; i < taskSize; i++ {
+		taskGroup.Add(1)
+		go func(exit <-chan bool) {
 			for {
 				select {
-				case <-fileInfo.Down:
-					fmt.Println("文件下载失败")
+				case <-exit:
+					taskGroup.Done()
 					return
-				case <-ok:
-					fmt.Println("块下载成功")
-					return
+				default:
+					taskList, ok := getTaskList(filePath)
+					if !ok {
+						continue
+					}
+					if len(taskList) <= 0 {
+						continue
+					}
+					taskInfo := taskList[0]
+					taskList = taskList[1:]
+					setTaskList(filePath, taskList)
+					segment := &seg[filePath][taskInfo.segIndex]
+					request := getRequest(segment.Url, segment.Start, segment.End)
+					send(request, segment, fileMap[filePath])
+					go writeFile(*fileMap[filePath], segment)
 				}
 			}
-		}
-
+		}(exit)
 	}
+	select {
+	case <-fileMap[filePath].TaskExit:
+		for i := 0; i < taskSize; i++ {
+			exit <- true
+		}
+		taskGroup.Wait()
+		fileMap[filePath].RateExit <- true
+		return
+	}
+}
 
+func getTaskList(filePath string) ([]task, bool) {
+	fileMap[filePath].Task.RLock()
+	taskList, ok := taskMap[filePath]
+	fileMap[filePath].Task.RUnlock()
+	return taskList, ok
+}
+
+func setTaskList(filePath string, taskList []task) {
+	fileMap[filePath].Task.Lock()
+	taskMap[filePath] = taskList
+	fileMap[filePath].Task.Unlock()
 }

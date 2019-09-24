@@ -1,14 +1,13 @@
 package main
 
 import (
-	"errors"
 	"os"
 	"strconv"
 	"strings"
 	"yan.com/downloader/models"
 )
 
-var fileList []models.FileInfo = make([]models.FileInfo, 0)
+var fileMap = make(map[string]*models.FileInfo)
 
 func isNotExist(filePath string) bool {
 	if _, err := os.Stat(filePath); os.IsNotExist(err) {
@@ -18,18 +17,21 @@ func isNotExist(filePath string) bool {
 }
 
 func creatFile(filePath string) (file *os.File, err error) {
+	fileOrgin := filePath
+	temp := []byte(fileOrgin)
+	// 重命名
+	index := strings.LastIndex(filePath, ".")
+	pre := string(temp[0:index])
+	end := string(temp[index:])
 	count := 2
 	for {
 		if !isNotExist(filePath) {
-			// 重命名
-			index := strings.LastIndex(filePath, ".")
 			if index == -1 {
-				filePath = filePath + strconv.Itoa(count)
+				filePath = fileOrgin + strconv.Itoa(count)
 				count++
 				continue
 			} else {
-				temp := []byte(filePath)
-				filePath = string(temp[0:index]) + strconv.Itoa(count) + string(temp[index:])
+				filePath = pre + strconv.Itoa(count) + end
 				count++
 				continue
 			}
@@ -56,27 +58,19 @@ func getFileSize(filePath string) int64 {
 	return fi.Size()
 }
 
-func writeFile(fileInfo models.FileInfo, segment *models.SegMent, body []byte) error {
+func writeFile(fileInfo models.FileInfo, segment *models.SegMent) {
 	// 加锁
-	fileInfo.Lock.Lock()
-	// 偏移
-	ret, err := fileInfo.File.Seek(int64(segment.Start), 0)
-	if err != nil {
-		return err
-	}
-	if ret != int64(segment.Start) {
-		return errors.New("写入文件失败!")
-	}
+	//fileInfo.Lock.Lock()
+	file := fileInfo.File
 	// 写操作
-	len, err := fileInfo.File.Write(body)
+	len, err := file.WriteAt(segment.Cache, int64(segment.Start))
 	if err != nil {
-
-		return err
+		//fileInfo.Lock.Unlock()
+		return
 	}
-	if len != segment.End-segment.Start {
-		return errors.New("写入文件失败!")
+	if len-1 != segment.End-segment.Start {
+		//fileInfo.Lock.Unlock()
+		return
 	}
-	fileInfo.Lock.Unlock()
-	segment.Complete = true
-	return nil
+	//fileInfo.Lock.Unlock()
 }

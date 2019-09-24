@@ -7,4 +7,5 @@ type SegMent struct {
 	Url      string
 	Count    int
 	Complete bool
+	Cache    []byte
 }

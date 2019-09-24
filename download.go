@@ -8,7 +8,7 @@ import (
 	"yan.com/downloader/models"
 )
 
-const segSize int = 1024 * 1024
+const segSize int = 2 * 1024 * 1024
 
 var (
 	seg    = make(map[string][]models.SegMent)
@@ -19,16 +19,16 @@ var (
 func download(url string) error {
 	// 获取目标文件信息
 	fileInfo, err := getFileInfo(url)
+	//fileInfo.File.Close()
 	if err != nil {
 		return fmt.Errorf("获取目标文件信息失败: %w", err)
 	}
-
 	group.Add(1)
-	go downloadDirect(fileInfo)
-	getRate(fileInfo, time.Now())
+	downloadDirect(fileInfo)
 	group.Wait()
+	delete(seg, fileInfo.FilePath)
+	delete(taskMap, fileInfo.FilePath)
 	return nil
-
 }
 
 func downloadDirect(fileInfo models.FileInfo) {
@@ -46,7 +46,9 @@ func downloadDirect(fileInfo models.FileInfo) {
 	}
 	segList := make([]models.SegMent, 0)
 	seg[fileInfo.FilePath] = append(segList, segment)
-	go startBT(fileInfo, 0)
+	startBT(fileInfo, 0)
+	//time.Sleep(time.Second)
 	// 开启任务
-
+	go startTask(fileInfo.FilePath)
+	getRate(fileInfo, time.Now())
 }
