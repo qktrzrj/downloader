@@ -7,7 +7,8 @@ import (
 	"yan.com/downloader/models"
 )
 
-var fileMap = make(map[string]*models.FileInfo)
+var fileMap = make(map[int]models.FileInfo)
+var fileQueue ItemQueue
 
 func isNotExist(filePath string) bool {
 	if _, err := os.Stat(filePath); os.IsNotExist(err) {
@@ -17,8 +18,8 @@ func isNotExist(filePath string) bool {
 }
 
 func creatFile(filePath string) (file *os.File, err error) {
-	fileOrgin := filePath
-	temp := []byte(fileOrgin)
+	fileOrigin := filePath
+	temp := []byte(fileOrigin)
 	// 重命名
 	index := strings.LastIndex(filePath, ".")
 	pre := string(temp[0:index])
@@ -27,7 +28,7 @@ func creatFile(filePath string) (file *os.File, err error) {
 	for {
 		if !isNotExist(filePath) {
 			if index == -1 {
-				filePath = fileOrgin + strconv.Itoa(count)
+				filePath = fileOrigin + strconv.Itoa(count)
 				count++
 				continue
 			} else {
@@ -50,27 +51,34 @@ func deleteFile(filePath string) {
 	os.Remove(filePath)
 }
 
-func getFileSize(filePath string) int64 {
-	if isNotExist(filePath) {
+func getFileSize(fileId int) int64 {
+	if isNotExist(fileMap[fileId].FilePath) {
 		return 0
 	}
-	fi, _ := os.Stat(filePath)
+	fi, _ := fileMap[fileId].File.Stat()
 	return fi.Size()
 }
 
-func writeFile(fileInfo models.FileInfo, segment *models.SegMent) {
-	// 加锁
-	//fileInfo.Lock.Lock()
-	file := fileInfo.File
-	// 写操作
-	len, err := file.WriteAt(segment.Cache, int64(segment.Start))
-	if err != nil {
-		//fileInfo.Lock.Unlock()
-		return
+func writeFile(fileId int) {
+	for {
+		select {
+		case <-fileMap[fileId].Exit:
+			return
+		default:
+			index := <-fileMap[fileId].FileChan
+			segment := seg[fileId][index]
+			//file, _ := os.OpenFile(fileInfo.FilePath, os.O_RDWR|os.O_TRUNC, 0666)
+			file := fileMap[fileId].File
+			//file.Seek(int64(segment.Start), 0)
+			// 写操作
+			len, err := file.WriteAt(segment.Cache, int64(segment.Start))
+			file.Sync()
+			if err != nil {
+				fileMap[fileId].FileChan <- index
+			}
+			if len-1 != segment.End-segment.Start {
+				fileMap[fileId].FileChan <- index
+			}
+		}
 	}
-	if len-1 != segment.End-segment.Start {
-		//fileInfo.Lock.Unlock()
-		return
-	}
-	//fileInfo.Lock.Unlock()
 }

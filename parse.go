@@ -5,16 +5,15 @@ import (
 	browser "github.com/EDDYCJY/fake-useragent"
 	"github.com/valyala/fasthttp"
 	"strings"
-	"sync"
 	"yan.com/downloader/models"
 )
 
-func getFileInfo(url string) (models.FileInfo, error) {
+func getFileInfo(url string) (int, error) {
 	// 请求目标文件信息
 	resp := &fasthttp.Response{}
-	err := client.Do(getHead(url), resp)
+	err := fasthttp.Do(getHead(url), resp)
 	if err != nil {
-		return models.FileInfo{}, fmt.Errorf("请求目标文件信息失败: %w", err)
+		return 0, fmt.Errorf("请求目标文件信息失败: %w", err)
 	}
 	var renewal = false
 	if temp := resp.Header.Peek("Accept-Ranges"); len(temp) != 0 {
@@ -32,33 +31,28 @@ func getFileInfo(url string) (models.FileInfo, error) {
 	// 创建目标文件
 	file, err := creatFile("./" + fullName)
 	if err != nil {
-		return models.FileInfo{}, err
+		return 0, err
 	}
-	//file.Close()
+	//file.Sync()
 	fileInfo := models.FileInfo{
-		Renewal:   renewal,
-		Length:    resp.Header.ContentLength(),
-		Url:       url,
-		FileName:  file.Name(),
-		FilePath:  "./" + file.Name(),
-		File:      file,
-		Exit:      make(chan bool),
-		TaskExit:  make(chan bool),
-		RateExit:  make(chan bool),
-		Down:      true,
-		Lock:      sync.Mutex{},
-		Task:      sync.RWMutex{},
-		FileCache: make(map[int][]byte),
+		Renewal:  renewal,
+		Length:   resp.Header.ContentLength(),
+		Url:      url,
+		File:     file,
+		FileName: fullName,
+		FilePath: "./" + fullName,
+		Exit:     make(chan bool),
 	}
-	fileMap[fileInfo.FilePath] = &fileInfo
-	return fileInfo, nil
+	fileMap[fileInfo.Id] = fileInfo
+	taskList[fileInfo.Id] = make(chan models.SegMent)
+	activeTaskList[fileInfo.Id] = make(chan struct{}, maxTaskSize)
+	return fileInfo.Id, nil
 }
 
 func getHead(url string) *fasthttp.Request {
 	head := fasthttp.RequestHeader{}
 	head.SetRequestURI(url)
 	head.SetUserAgent(browser.Random())
-	//head.Set(fasthttp.HeaderIfRange, "true")
 	head.SetMethod(fasthttp.MethodHead)
 	request := &fasthttp.Request{
 		Header: head,
@@ -78,21 +72,25 @@ func getRequest(url string, start int, end int) *fasthttp.Request {
 	return request
 }
 
-func send(req *fasthttp.Request, segment *models.SegMent, fileInfo *models.FileInfo) {
+func send(req *fasthttp.Request, segment models.SegMent, fileId int) {
 	resp := &fasthttp.Response{}
-LOOP:
-	for {
-		err := client.Do(req, resp)
-		if err != nil {
-			segment.Count++
-			if segment.Count >= 3 {
-				fileInfo.Exit <- true
-				return
-			}
-			break LOOP
+	err := fasthttp.Do(req, resp)
+	if err != nil || (resp.StatusCode() != 200 && resp.StatusCode() != 206) {
+		segment.Count++
+		seg[fileId][segment.Index] = segment
+		if segment.Count >= 3 {
+			close(fileMap[fileId].Exit)
+			return
 		}
-		segment.Cache = resp.Body()
-		resp.ConnectionClose()
+		// 退出当前活动队列，进行任务队列重排
+		<-activeTaskList[fileId]
+		taskList[fileId] <- segment
 		return
 	}
+	segment.Cache = resp.Body()
+	segment.Complete = true
+	seg[fileId][segment.Index] = segment
+	resp.ConnectionClose()
+	fileMap[fileId].FileChan <- segment.Index
+	return
 }
