@@ -1,10 +1,10 @@
 package main
 
 import (
+	"downloader/models"
 	"os"
 	"strconv"
 	"strings"
-	"yan.com/downloader/models"
 )
 
 var fileMap = make(map[int]models.FileInfo)

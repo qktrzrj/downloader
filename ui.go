@@ -96,10 +96,10 @@ func setUI() {
 	mainwin.Show()
 }
 
-func main() {
-	//url := "https://download.jetbrains.8686c.com/idea/ideaIC-2019.2.2.dmg"
-	// 下载器调度启动
-	fileQueue.New()
-	go scheduler()
-	ui.Main(setUI)
-}
+//func main() {
+//	//url := "https://download.jetbrains.8686c.com/idea/ideaIC-2019.2.2.dmg"
+//	// 下载器调度启动
+//	fileQueue.New()
+//	go scheduler()
+//	ui.Main(setUI)
+//}

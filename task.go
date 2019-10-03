@@ -1,7 +1,7 @@
 package main
 
 import (
-	"yan.com/downloader/models"
+	"downloader/models"
 )
 
 const (

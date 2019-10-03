@@ -1,10 +1,10 @@
 package main
 
 import (
+	"downloader/models"
 	"github.com/andlabs/ui"
 	"sync"
 	"time"
-	"yan.com/downloader/models"
 )
 
 const segSize int = 0.5 * 1024 * 1024

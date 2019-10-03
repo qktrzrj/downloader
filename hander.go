@@ -1,9 +1,9 @@
 package main
 
 import (
+	"downloader/models"
 	"fmt"
 	"time"
-	"yan.com/downloader/models"
 )
 
 var schedule = make(chan int)

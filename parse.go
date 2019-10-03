@@ -1,11 +1,11 @@
 package main
 
 import (
+	"downloader/models"
 	"fmt"
 	browser "github.com/EDDYCJY/fake-useragent"
 	"github.com/valyala/fasthttp"
 	"strings"
-	"yan.com/downloader/models"
 )
 
 func getFileInfo(url string) (int, error) {
