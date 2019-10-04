@@ -5,13 +5,20 @@ import (
 	"fmt"
 	browser "github.com/EDDYCJY/fake-useragent"
 	"github.com/valyala/fasthttp"
+	"math/rand"
 	"strings"
 )
 
 func getFileInfo(url string) (int, error) {
 	// 请求目标文件信息
-	resp := &fasthttp.Response{}
-	err := fasthttp.Do(getHead(url), resp)
+	resp := fasthttp.AcquireResponse()
+	defer fasthttp.ReleaseResponse(resp)
+	req := getHead(url)
+	defer fasthttp.ReleaseRequest(req)
+	// 构建客户端
+	fileId := rand.Int()
+	clientMap[fileId] = &fasthttp.Client{}
+	err := clientMap[fileId].Do(req, resp)
 	if err != nil {
 		return 0, fmt.Errorf("请求目标文件信息失败: %w", err)
 	}
@@ -33,8 +40,9 @@ func getFileInfo(url string) (int, error) {
 	if err != nil {
 		return 0, err
 	}
-	//file.Sync()
 	fileInfo := models.FileInfo{
+		Id:       fileId,
+		Row:      rowCount,
 		Renewal:  renewal,
 		Length:   resp.Header.ContentLength(),
 		Url:      url,
@@ -54,9 +62,8 @@ func getHead(url string) *fasthttp.Request {
 	head.SetRequestURI(url)
 	head.SetUserAgent(browser.Random())
 	head.SetMethod(fasthttp.MethodHead)
-	request := &fasthttp.Request{
-		Header: head,
-	}
+	request := fasthttp.AcquireRequest()
+	request.Header = head
 	return request
 }
 
@@ -66,15 +73,19 @@ func getRequest(url string, start int, end int) *fasthttp.Request {
 	head.SetUserAgent(browser.Random())
 	head.SetByteRange(start, end)
 	head.SetMethod(fasthttp.MethodGet)
-	request := &fasthttp.Request{
-		Header: head,
-	}
+	request := fasthttp.AcquireRequest()
+	request.Header = head
 	return request
 }
 
 func send(req *fasthttp.Request, segment models.SegMent, fileId int) {
-	resp := &fasthttp.Response{}
-	err := fasthttp.Do(req, resp)
+	if segment.Complete || segment.Cache != nil {
+		return
+	}
+	resp := fasthttp.AcquireResponse()
+	defer fasthttp.ReleaseResponse(resp)
+	defer fasthttp.ReleaseRequest(req)
+	err := clientMap[fileId].Do(req, resp)
 	if err != nil || (resp.StatusCode() != 200 && resp.StatusCode() != 206) {
 		segment.Count++
 		seg[fileId][segment.Index] = segment
@@ -88,7 +99,6 @@ func send(req *fasthttp.Request, segment models.SegMent, fileId int) {
 		return
 	}
 	segment.Cache = resp.Body()
-	segment.Complete = true
 	seg[fileId][segment.Index] = segment
 	resp.ConnectionClose()
 	fileMap[fileId].FileChan <- segment.Index

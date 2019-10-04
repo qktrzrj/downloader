@@ -4,7 +4,9 @@ import "os"
 
 type FileInfo struct {
 	Id       int
+	Row      int
 	Renewal  bool // 是否支持断点续传
+	Status   int
 	Length   int
 	Url      string
 	File     *os.File

@@ -2,17 +2,17 @@ package main
 
 import (
 	"downloader/models"
-	"github.com/andlabs/ui"
+	"github.com/valyala/fasthttp"
 	"sync"
 	"time"
 )
 
-const segSize int = 0.5 * 1024 * 1024
-
 var (
-	seg     = make(map[int][]models.SegMent)
-	barList = make(map[int]*ui.ProgressBar)
-	group   sync.WaitGroup
+	seg           = make(map[int][]models.SegMent)
+	segSize   int = 0.5 * 1024 * 1024
+	barList       = make(map[int]int)
+	clientMap     = make(map[int]*fasthttp.Client)
+	group     sync.WaitGroup
 )
 
 func download(fileId int) {
@@ -22,7 +22,6 @@ func download(fileId int) {
 	go startBT(fileId)
 	go startTask(fileId)
 	go writeFile(fileId)
-	//downloader.Show()
 	go getRate(fileId, time.Now())
 	group.Wait()
 	filenum--

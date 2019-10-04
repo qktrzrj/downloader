@@ -40,7 +40,6 @@ func creatFile(filePath string) (file *os.File, err error) {
 		break
 	}
 	file, err = os.Create(filePath)
-	//file, err = os.OpenFile(filePath, os.O_CREATE|os.O_RDWR, 0644)
 	return
 }
 
@@ -67,9 +66,7 @@ func writeFile(fileId int) {
 		default:
 			index := <-fileMap[fileId].FileChan
 			segment := seg[fileId][index]
-			//file, _ := os.OpenFile(fileInfo.FilePath, os.O_RDWR|os.O_TRUNC, 0666)
 			file := fileMap[fileId].File
-			//file.Seek(int64(segment.Start), 0)
 			// 写操作
 			len, err := file.WriteAt(segment.Cache, int64(segment.Start))
 			file.Sync()
@@ -79,6 +76,9 @@ func writeFile(fileId int) {
 			if len-1 != segment.End-segment.Start {
 				fileMap[fileId].FileChan <- index
 			}
+			segment.Complete = true
+			segment.Cache = nil
+			seg[fileId][segment.Index] = segment
 		}
 	}
 }

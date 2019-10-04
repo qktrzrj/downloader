@@ -11,33 +11,22 @@ var sch = make(chan struct{})
 var filenum int
 
 func scheduler() {
-	go func() {
-		for {
-			select {
-			case <-sch:
-				if filenum < 2 && fileQueue.Size() > 0 {
-					fileId := *fileQueue.Dequeue()
-					schedule <- fileId.(int)
-					filenum++
-				}
-			}
-		}
-	}()
 	for {
+	LOOP:
 		select {
 		case fileId := <-schedule:
 			if filenum >= 3 {
 				fileQueue.Enqueue(fileId)
 				sch <- struct{}{}
-				continue
+				goto LOOP
 			}
+			filenum++
 			go download(fileId)
 		}
 	}
 }
 
 func getRate(fileId int, t time.Time) {
-	progressBar := barList[fileId]
 	for {
 		select {
 		case <-fileMap[fileId].Exit:
@@ -46,12 +35,12 @@ func getRate(fileId int, t time.Time) {
 		default:
 			// 获取已写入块总和大小
 			size := getFileSize(fileId)
-			percent := getPercent(size, int64(fileMap[fileId].Length))
+			barList[fileId] = getPercent(size, int64(fileMap[fileId].Length))
+			model[0].RowChanged(fileMap[fileId].Row)
 			//result, _ := strconv.Atoi(percent)
 			//str := "working " + percent + "%" + "[" + bar(result, 100) + "] " + " " +
 			//	fmt.Sprintf("%.f", getCurrentSize(t)) + "s"
 			//fmt.Sprintf("\r%s", str)
-			progressBar.SetValue(percent)
 			if size >= int64(fileMap[fileId].Length) && len(activeTaskList[fileMap[fileId].Id]) <= 0 {
 				fmt.Println("\n" + time.Now().String() + "下载完成")
 				close(fileMap[fileId].Exit)
@@ -85,20 +74,8 @@ func allocation(fileId int, index int) {
 }
 
 func getPercent(a int64, b int64) int {
-	result := a / b * 100
+	result := float64(a) / float64(b) * 100
 	return int(result)
-}
-
-func bar(count, size int) string {
-	str := ""
-	for i := 0; i < size; i++ {
-		if i < count {
-			str += "="
-		} else {
-			str += " "
-		}
-	}
-	return str
 }
 
 func getCurrentSize(t time.Time) float64 {
