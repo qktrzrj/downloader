@@ -1,6 +1,7 @@
-package main
+package ui
 
 import (
+	"downloader/downloader"
 	"github.com/andlabs/ui"
 	"strconv"
 )
@@ -8,9 +9,8 @@ import (
 var statusCando map[int]string = map[int]string{0: "暂停", 1: "继续"}
 
 type modelHandler struct {
-	lab       int
-	colNum    int
-	RowFileId []int
+	lab    int
+	colNum int
 }
 
 func (modelhandler *modelHandler) ColumnTypes(m *ui.TableModel) []ui.TableValue {
@@ -29,18 +29,22 @@ func (modelhandler *modelHandler) ColumnTypes(m *ui.TableModel) []ui.TableValue 
 }
 
 func (modelhandler *modelHandler) NumRows(m *ui.TableModel) int {
-	return len(modelhandler.RowFileId)
+	if modelhandler.lab == 1 {
+		return len(downloader.Downloader.ActiveTaskMap)
+	}
+	return len(downloader.Downloader.CompleteTaskMap)
 }
 
 func (modelhandler *modelHandler) CellValue(m *ui.TableModel, row, column int) ui.TableValue {
 	maxCol := modelhandler.colNum
+	task := downloader.Downloader
 	if modelhandler.lab == 0 {
 		maxCol -= 3
 		switch column {
 		case 4:
-			return ui.TableInt(barList[modelhandler.RowFileId[row]])
+			return ui.TableInt(main.barList[modelhandler.RowFileId[row]])
 		case 5:
-			return ui.TableString(statusCando[fileMap[modelhandler.RowFileId[row]].Status])
+			return ui.TableString(statusCando[fileInfo.Status])
 		case 6:
 			return ui.TableString("取消")
 		}
@@ -50,11 +54,11 @@ func (modelhandler *modelHandler) CellValue(m *ui.TableModel, row, column int) u
 		case 0:
 			return ui.TableString(strconv.Itoa(row + 1))
 		case 1:
-			return ui.TableString(fileMap[modelhandler.RowFileId[row]].FileName)
+			return ui.TableString(fileInfo.FileName)
 		case 2:
-			return ui.TableString(fileMap[modelhandler.RowFileId[row]].FilePath)
+			return ui.TableString(fileInfo.FilePath)
 		case 3:
-			return ui.TableString(fileMap[modelhandler.RowFileId[row]].Url)
+			return ui.TableString(fileInfo.Url)
 		}
 	}
 	return nil
@@ -62,19 +66,26 @@ func (modelhandler *modelHandler) CellValue(m *ui.TableModel, row, column int) u
 
 func (modelhandler *modelHandler) SetCellValue(m *ui.TableModel, row, column int, value ui.TableValue) {
 	maxCol := modelhandler.colNum
+	fileId := modelhandler.RowFileId[row]
+	fileInfo := main.readFileMap(fileId)
 	if modelhandler.lab == 0 {
 		maxCol -= 3
 	}
 	if column < modelhandler.colNum && row < maxCol {
 		switch column {
 		case 5:
-			fileInfo := fileMap[modelhandler.RowFileId[row]]
 			if fileInfo.Status == 0 {
+				// 暂停
 				fileInfo.Status = 1
+				fileInfo.Continue = make(chan struct{})
+				close(fileInfo.Pause)
 			} else {
+				// 继续下载
 				fileInfo.Status = 0
+				fileInfo.Pause = make(chan struct{})
+				close(fileInfo.Continue)
 			}
-			fileMap[modelhandler.RowFileId[row]] = fileInfo
+			main.updateFileMap(fileId, fileInfo)
 		}
 	}
 }

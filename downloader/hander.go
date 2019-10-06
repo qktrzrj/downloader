@@ -1,7 +1,8 @@
-package main
+package downloader
 
 import (
-	"downloader/models"
+	"downloader"
+	"downloader/ui"
 	"fmt"
 	"time"
 )
@@ -16,57 +17,68 @@ func scheduler() {
 		select {
 		case fileId := <-schedule:
 			if filenum >= 3 {
-				fileQueue.Enqueue(fileId)
+				main.fileQueue.Enqueue(fileId)
 				sch <- struct{}{}
 				goto LOOP
 			}
 			filenum++
-			go download(fileId)
+			go main.download(fileId)
 		}
 	}
 }
 
 func getRate(fileId int, t time.Time) {
 	for {
+		fileInfo := main.readFileMap(fileId)
+		tablemodel := ui.model[0]
 		select {
-		case <-fileMap[fileId].Exit:
-			group.Done()
+		case <-fileInfo.Exit:
+			fmt.Println("退出Rate")
+			main.group.Done()
 			return
+		case <-fileInfo.Pause:
+			fmt.Println("暂停Rate")
+			select {
+			case <-fileInfo.Continue:
+				fmt.Println("继续Rate")
+			}
 		default:
 			// 获取已写入块总和大小
-			size := getFileSize(fileId)
-			barList[fileId] = getPercent(size, int64(fileMap[fileId].Length))
-			model[0].RowChanged(fileMap[fileId].Row)
+			size := main.getFileSize(fileId)
+			main.barList[fileId] = getPercent(size, int64(fileInfo.Length))
+			tablemodel.RowChanged(fileInfo.Row)
 			//result, _ := strconv.Atoi(percent)
 			//str := "working " + percent + "%" + "[" + bar(result, 100) + "] " + " " +
 			//	fmt.Sprintf("%.f", getCurrentSize(t)) + "s"
 			//fmt.Sprintf("\r%s", str)
-			if size >= int64(fileMap[fileId].Length) && len(activeTaskList[fileMap[fileId].Id]) <= 0 {
+			if size >= int64(fileInfo.Length) && len(activeTaskList[fileInfo.Id]) <= 0 {
 				fmt.Println("\n" + time.Now().String() + "下载完成")
-				close(fileMap[fileId].Exit)
+				close(fileInfo.Exit)
 			}
 		}
 	}
 }
 
 func allocation(fileId int, index int) {
-	segment := seg[fileId][index]
+	segList := main.readSeg(fileId)
+	segment := segList[index]
+	fileInfo := main.readFileMap(fileId)
 	// 如果文件支持断点下载，且大于块大小
 	//if fileMap[fileId].Renewal &&
-	if segment.End-segment.Start > segSize {
+	if segment.End-segment.Start > main.segSize {
 		// 分块
-		segment.End = segment.Start + segSize
-		segList := seg[fileId]
-		segNext := models.SegMent{
+		segment.End = segment.Start + main.segSize
+		segNext := Downloader.SegMent{
 			Start:    segment.End + 1,
-			End:      fileMap[fileId].Length - 1,
-			Url:      fileMap[fileId].Url,
+			End:      fileInfo.Length - 1,
+			Url:      fileInfo.Url,
 			Count:    0,
 			Index:    segment.Index + 1,
 			Complete: false,
 		}
-		seg[fileId][index] = segment
-		seg[fileId] = append(segList, segNext)
+		segList[index] = segment
+		segList = append(segList, segNext)
+		main.updateSeg(fileId, segList)
 		allocation(fileId, index+1)
 		return
 	}
