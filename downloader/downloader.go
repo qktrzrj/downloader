@@ -38,6 +38,8 @@ type downloader struct {
 	Event               chan DownloadEvent
 	SavePath            string
 	BufferPool          sync.Pool
+	activeTaskNum       int
+	maxActiveTaskNum    int
 	ActiveTaskMap       map[taskId]*Task //未完成的任务
 	ActiveRowToTaskId   [][1]int
 	CompleteTaskMap     map[taskId]*Task //已完成的任务
@@ -84,7 +86,7 @@ func (d *downloader) AddTask(task *Task) error {
 	// 添加任务
 	Downloader.ActiveTaskMap[task.Id()] = task
 	// 将任务放入等待队列
-	Downloader.TaskQueue.Enqueue(task)
+	Downloader.TaskQueue.Enqueue(task.Id())
 	// 维护任务列表
 	rowToId := [1]int{task.id}
 	Downloader.ActiveRowToTaskId = append(Downloader.ActiveRowToTaskId, rowToId)
@@ -173,4 +175,20 @@ func (d *downloader) removeTask(id taskId) {
 		window.Destroy()
 	})
 	window.Show()
+}
+
+func (d *downloader) Schedule() {
+	for {
+		if d.activeTaskNum <= d.maxActiveTaskNum && !d.TaskQueue.IsEmpty() {
+			id := (*d.TaskQueue.Dequeue()).(taskId)
+			task, ok := d.ActiveTaskMap[id]
+			if !ok {
+				continue
+			}
+			err := task.Start()
+			if err != nil {
+				continue
+			}
+		}
+	}
 }

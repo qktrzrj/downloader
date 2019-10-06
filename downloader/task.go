@@ -1,13 +1,14 @@
 package downloader
 
 import (
+	"errors"
 	"github.com/valyala/fasthttp"
 	"os"
 )
 
 // 任务状态
 const (
-	wait = iota
+	waiting = iota
 	downloading
 	paused
 	errored
@@ -38,4 +39,15 @@ type Task struct {
 func (task *Task) Id() taskId {
 	id := taskId(task.id)
 	return id
+}
+
+func (task *Task) Start() error {
+	if task.Status != waiting {
+		return errors.New("当前状态无法下载！")
+	}
+	task.Status = downloading
+	go func() {
+		task.init()
+
+	}()
 }

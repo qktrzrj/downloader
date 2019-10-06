@@ -113,7 +113,7 @@ func GetFileTask(url string, client *fasthttp.HostClient) (task *Task, err error
 	task = &Task{
 		id:         rand.Int(),
 		renewal:    renewal,
-		Status:     wait,
+		Status:     waiting,
 		fileLength: resp.Header.ContentLength(),
 		Url:        url,
 		finalLink:  finalLink,
