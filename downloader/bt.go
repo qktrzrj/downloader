@@ -14,51 +14,16 @@ type bt struct {
 	task *Task
 }
 
-func startBT(fileId int) {
-	seglen := len(main.seg[fileId])
-	for i := 0; i < seglen; i++ {
-		fileInfo := main.readFileMap(fileId)
-		select {
-		case <-fileInfo.Exit:
-			fmt.Println("退出BT")
-			return
-		case <-fileInfo.Pause:
-			fmt.Println("暂停BT")
-			select {
-			case <-fileInfo.Continue:
-				fmt.Println("继续BT")
-			}
-		default:
-			segment := main.readSegIndex(fileId, i)
-			if segment.Complete {
-				continue
-			}
-			if segment.Cache != nil {
-				fileInfo.FileChan <- i
-				continue
-			}
-		LOOP:
-			if len(activeTaskList[fileId]) >= maxTaskSize {
-				goto LOOP
-			}
-			taskList[fileId] <- segment
-		}
-	}
-}
-
-func startTask(fileId int) {
+func (bt *bt) start() {
+	errNum := 0
 	for {
-		fileInfo := main.readFileMap(fileId)
-		select {
-		case <-fileInfo.Exit:
-			fmt.Println("退出Task")
+		if errNum >= 3 {
+			bt.task.Status = Errored
 			return
-		case <-fileInfo.Pause:
-			fmt.Println("暂停Task")
-			select {
-			case <-fileInfo.Continue:
-				fmt.Println("继续Task")
-			}
+		}
+		select {
+		case <-bt.task.btCancel:
+			return
 		default:
 			segment := <-taskList[fileId]
 			fmt.Println(segment.Index)

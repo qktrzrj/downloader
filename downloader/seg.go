@@ -1,6 +1,6 @@
 package downloader
 
 type SegMent struct {
-	Start int
-	End   int
+	Start int64
+	End   int64
 }

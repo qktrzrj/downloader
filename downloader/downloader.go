@@ -5,6 +5,7 @@ import (
 	ui2 "downloader/ui"
 	"fmt"
 	"github.com/andlabs/ui"
+	"os"
 	"os/exec"
 	"runtime"
 	"sync"
@@ -14,20 +15,20 @@ type taskId int
 
 // 事件列表
 const (
-	pause = iota
-	resume
-	cancel
-	remove
-	open
-	success
+	Pause = iota
+	Resume
+	Cancel
+	Remove
+	Open
+	Success
 )
 
 var Downloader downloader
 
 var commands = map[string]string{
 	"windows": "start",
-	"darwin":  "open",
-	"linux":   "xdg-open",
+	"darwin":  "Open",
+	"linux":   "xdg-Open",
 }
 
 // 下载器
@@ -72,11 +73,11 @@ func (d *downloader) Init() {
 // 添加任务，并为任务添加控制器
 func (d *downloader) AddTask(task *Task) error {
 	// 创建文件
-	file, err := creatFile(task.SavePath + "/" + task.FileName)
+	file, err := os.OpenFile(task.SavePath, os.O_CREATE, 0644)
 	if err != nil {
 		return err
 	}
-	task.file = file
+	_ = file.Close()
 	// 创建控制器
 	task.Event = &TaskEvent{
 		Resume: make(chan struct{}),
@@ -120,6 +121,7 @@ func (d *downloader) cancelTask(id taskId) {
 		ui.MsgBoxError(ui2.MainWin, "错误", "任务不存在")
 	}
 	task.Event.Cancel <- struct{}{}
+	delete(Downloader.ActiveTaskMap, id)
 }
 
 // 任务完成
@@ -137,7 +139,7 @@ func (d *downloader) openTask(id taskId) {
 	}
 	run, ok := commands[runtime.GOOS]
 	if !ok {
-		ui.MsgBoxError(ui2.MainWin, "错误", fmt.Sprintf("don't know how to open things on %s platform", runtime.GOOS))
+		ui.MsgBoxError(ui2.MainWin, "错误", fmt.Sprintf("don't know how to Open things on %s platform", runtime.GOOS))
 	}
 	cmd := exec.Command(run, task.SavePath+"/"+task.FileName)
 	err := cmd.Start()
@@ -152,6 +154,7 @@ func (d *downloader) removeTask(id taskId) {
 	if !ok {
 		ui.MsgBoxError(ui2.MainWin, "错误", "任务不存在")
 	}
+	delete(Downloader.CompleteTaskMap, task.Id())
 	window := ui.NewWindow("提示", 200, 200, false)
 	window.SetMargined(true)
 	vbox := ui.NewVerticalBox()
@@ -166,17 +169,16 @@ func (d *downloader) removeTask(id taskId) {
 	hbox.Append(sure, false)
 	hbox.Append(not, false)
 	sure.OnClicked(func(button *ui.Button) {
-		deleteFile(task.SavePath + "/" + task.FileName)
-		delete(Downloader.CompleteTaskMap, task.Id())
+		_ = os.Remove(task.SavePath)
 		window.Destroy()
 	})
 	not.OnClicked(func(button *ui.Button) {
-		delete(Downloader.CompleteTaskMap, task.Id())
 		window.Destroy()
 	})
 	window.Show()
 }
 
+// 任务调度
 func (d *downloader) Schedule() {
 	for {
 		if d.activeTaskNum <= d.maxActiveTaskNum && !d.TaskQueue.IsEmpty() {
@@ -186,8 +188,37 @@ func (d *downloader) Schedule() {
 				continue
 			}
 			err := task.Start()
+			go task.listen()
 			if err != nil {
 				continue
+			}
+		}
+	}
+}
+
+// 监控事件
+func (d *downloader) ListenEvent() {
+	for {
+		select {
+		case event := <-d.Event:
+			switch event.Enum {
+			case Pause:
+				d.pauseTask(event.TaskId)
+				break
+			case Resume:
+				d.resumeTask(event.TaskId)
+				break
+			case Cancel:
+				d.cancelTask(event.TaskId)
+				break
+			case Remove:
+				d.removeTask(event.TaskId)
+				break
+			case Open:
+				d.openTask(event.TaskId)
+				break
+			case Success:
+				break
 			}
 		}
 	}

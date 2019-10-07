@@ -54,7 +54,7 @@ func downloadingPage() ui.Control {
 			return
 		}
 		// 当文件名重复时
-		if !downloader.FileIsNotExist(task.SavePath + "/" + task.FileName) {
+		if !downloader.FileIsNotExist(downloader.Downloader.SavePath + "/" + task.FileName) {
 			window := ui.NewWindow("提示", 400, 200, false)
 			window.SetMargined(true)
 			box := ui.NewVerticalBox()
@@ -75,6 +75,7 @@ func downloadingPage() ui.Control {
 			})
 			window.Show()
 		}
+		task.SavePath = downloader.Downloader.SavePath + "/" + task.FileName
 		err = downloader.Downloader.AddTask(task)
 		if err != nil {
 			ui.MsgBoxError(MainWin, "错误", fmt.Sprintln(err))
