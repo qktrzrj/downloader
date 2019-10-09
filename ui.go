@@ -1,8 +1,20 @@
-package ui
+package main
 
 import "github.com/andlabs/ui"
 
-var MainWin *ui.Window
+var (
+	MainWin       *ui.Window
+	UIChangeEvent *UIEvent
+)
+
+type UIEvent struct {
+	DpInsert chan int
+	DpRemove chan int
+	DpChange chan int
+	CpInsert chan int
+	CpRemove chan int
+	CpChange chan int
+}
 
 func SetUI() func() {
 	return setUI

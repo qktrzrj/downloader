@@ -1,4 +1,4 @@
-package downloader
+package main
 
 import (
 	"bytes"
@@ -114,7 +114,7 @@ func GetFileTask(url string, client *fasthttp.HostClient) (task *Task, err error
 		id:         rand.Int(),
 		renewal:    renewal,
 		Status:     Waiting,
-		fileLength: resp.Header.ContentLength(),
+		fileLength: int64(resp.Header.ContentLength()),
 		Url:        url,
 		finalLink:  finalLink,
 		file:       nil,

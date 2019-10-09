@@ -1,8 +1,8 @@
-package downloader
+package main
 
 import (
 	"bytes"
-	ui2 "downloader/ui"
+	"errors"
 	"fmt"
 	"github.com/andlabs/ui"
 	"os"
@@ -38,13 +38,12 @@ type downloader struct {
 	BufferSize          int64
 	Event               chan DownloadEvent
 	SavePath            string
-	BufferPool          sync.Pool
 	activeTaskNum       int
 	maxActiveTaskNum    int
 	ActiveTaskMap       map[taskId]*Task //未完成的任务
-	ActiveRowToTaskId   [][1]int
+	ActiveRowToTaskId   []taskId
 	CompleteTaskMap     map[taskId]*Task //已完成的任务
-	CompleteRowToTaskId [][1]int
+	CompleteRowToTaskId []taskId
 	TaskQueue           *ItemQueue
 }
 
@@ -58,16 +57,11 @@ type DownloadEvent struct {
 func (d *downloader) Init() {
 	d.Event = make(chan DownloadEvent, 1)
 	d.ActiveTaskMap, d.CompleteTaskMap = make(map[taskId]*Task), make(map[taskId]*Task)
-	d.ActiveRowToTaskId, d.CompleteRowToTaskId = make([][1]int, 0), make([][1]int, 0)
+	d.ActiveRowToTaskId, d.CompleteRowToTaskId = make([]taskId, 0), make([]taskId, 0)
 	taskQueue := &ItemQueue{
 		lock: sync.RWMutex{},
 	}
 	d.TaskQueue = taskQueue.New()
-	d.BufferPool = sync.Pool{
-		New: func() interface{} {
-			return bytes.NewBuffer(make([]byte, 0, d.BufferSize))
-		},
-	}
 }
 
 // 添加任务，并为任务添加控制器
@@ -84,23 +78,45 @@ func (d *downloader) AddTask(task *Task) error {
 		Pause:  make(chan struct{}),
 		Cancel: make(chan struct{}),
 	}
+	task.BufferPool = &sync.Pool{
+		New: func() interface{} {
+			return bytes.NewBuffer(make([]byte, 0, d.BufferSize))
+		},
+	}
 	// 添加任务
 	Downloader.ActiveTaskMap[task.Id()] = task
 	// 将任务放入等待队列
 	Downloader.TaskQueue.Enqueue(task.Id())
 	// 维护任务列表
-	rowToId := [1]int{task.id}
-	Downloader.ActiveRowToTaskId = append(Downloader.ActiveRowToTaskId, rowToId)
+	Downloader.ActiveRowToTaskId = append(Downloader.ActiveRowToTaskId, task.Id())
 	// 将任务添加到界面
-	ui2.DpModel.RowInserted(len(Downloader.ActiveRowToTaskId) - 1)
+	DpModel.RowInserted(len(Downloader.ActiveRowToTaskId) - 1)
 	return nil
+}
+
+// 获取指定任务所在行
+func (d *downloader) getRow(id taskId, isActive bool) (int, error) {
+	if isActive {
+		for i := 0; i < len(Downloader.ActiveRowToTaskId); i++ {
+			if Downloader.ActiveRowToTaskId[i] == id {
+				return i, nil
+			}
+		}
+	} else {
+		for i := 0; i < len(Downloader.CompleteRowToTaskId); i++ {
+			if Downloader.CompleteRowToTaskId[i] == id {
+				return i, nil
+			}
+		}
+	}
+	return 0, errors.New("任务不存在")
 }
 
 // 暂停任务
 func (d *downloader) pauseTask(id taskId) {
 	task, ok := Downloader.ActiveTaskMap[id]
 	if !ok {
-		ui.MsgBoxError(ui2.MainWin, "错误", "任务不存在")
+		ui.MsgBoxError(MainWin, "错误", "任务不存在")
 	}
 	task.Event.Pause <- struct{}{}
 }
@@ -109,7 +125,7 @@ func (d *downloader) pauseTask(id taskId) {
 func (d *downloader) resumeTask(id taskId) {
 	task, ok := Downloader.ActiveTaskMap[id]
 	if !ok {
-		ui.MsgBoxError(ui2.MainWin, "错误", "任务不存在")
+		ui.MsgBoxError(MainWin, "错误", "任务不存在")
 	}
 	task.Event.Resume <- struct{}{}
 }
@@ -118,7 +134,7 @@ func (d *downloader) resumeTask(id taskId) {
 func (d *downloader) cancelTask(id taskId) {
 	task, ok := Downloader.ActiveTaskMap[id]
 	if !ok {
-		ui.MsgBoxError(ui2.MainWin, "错误", "任务不存在")
+		ui.MsgBoxError(MainWin, "错误", "任务不存在")
 	}
 	task.Event.Cancel <- struct{}{}
 	delete(Downloader.ActiveTaskMap, id)
@@ -135,16 +151,16 @@ func (d *downloader) cancelTask(id taskId) {
 func (d *downloader) openTask(id taskId) {
 	task, ok := Downloader.CompleteTaskMap[id]
 	if !ok {
-		ui.MsgBoxError(ui2.MainWin, "错误", "任务不存在")
+		ui.MsgBoxError(MainWin, "错误", "任务不存在")
 	}
 	run, ok := commands[runtime.GOOS]
 	if !ok {
-		ui.MsgBoxError(ui2.MainWin, "错误", fmt.Sprintf("don't know how to Open things on %s platform", runtime.GOOS))
+		ui.MsgBoxError(MainWin, "错误", fmt.Sprintf("don't know how to Open things on %s platform", runtime.GOOS))
 	}
 	cmd := exec.Command(run, task.SavePath+"/"+task.FileName)
 	err := cmd.Start()
 	if err != nil {
-		ui.MsgBoxError(ui2.MainWin, "错误", fmt.Sprintf("文件打开失败，错误原因: %v", err))
+		ui.MsgBoxError(MainWin, "错误", fmt.Sprintf("文件打开失败，错误原因: %v", err))
 	}
 }
 
@@ -152,7 +168,7 @@ func (d *downloader) openTask(id taskId) {
 func (d *downloader) removeTask(id taskId) {
 	task, ok := Downloader.CompleteTaskMap[id]
 	if !ok {
-		ui.MsgBoxError(ui2.MainWin, "错误", "任务不存在")
+		ui.MsgBoxError(MainWin, "错误", "任务不存在")
 	}
 	delete(Downloader.CompleteTaskMap, task.Id())
 	window := ui.NewWindow("提示", 200, 200, false)
@@ -176,6 +192,14 @@ func (d *downloader) removeTask(id taskId) {
 		window.Destroy()
 	})
 	window.Show()
+}
+
+func (d *downloader) FileIsNotExist(path string) bool {
+	_, err := os.Stat(path)
+	if err == os.ErrNotExist {
+		return true
+	}
+	return false
 }
 
 // 任务调度

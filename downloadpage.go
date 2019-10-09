@@ -1,7 +1,6 @@
-package ui
+package main
 
 import (
-	"downloader/downloader"
 	"fmt"
 	"github.com/andlabs/ui"
 )
@@ -48,13 +47,13 @@ func downloadingPage() ui.Control {
 			ui.MsgBoxError(MainWin, "错误", "请输入下载链接!")
 			return
 		}
-		task, err := downloader.GetFileTask(url, downloader.NewHostClient(url))
+		task, err := GetFileTask(url, NewHostClient(url))
 		if err != nil {
 			ui.MsgBoxError(MainWin, "错误", fmt.Sprintln(err))
 			return
 		}
 		// 当文件名重复时
-		if !downloader.FileIsNotExist(downloader.Downloader.SavePath + "/" + task.FileName) {
+		if !Downloader.FileIsNotExist(Downloader.SavePath + "/" + task.FileName) {
 			window := ui.NewWindow("提示", 400, 200, false)
 			window.SetMargined(true)
 			box := ui.NewVerticalBox()
@@ -67,27 +66,20 @@ func downloadingPage() ui.Control {
 			nbox.Append(name, true)
 			nbox.Append(getName, false)
 			getName.OnClicked(func(innerButton *ui.Button) {
-				if !downloader.FileIsNotExist(task.SavePath + "/" + name.Text()) {
-					ui.MsgBox(window, "错误", "文件名重复！")
+				if !Downloader.FileIsNotExist(task.SavePath + "/" + name.Text()) {
+					ui.MsgBoxError(window, "错误", "文件名重复！")
 				}
 				task.FileName = name.Text()
 				window.Destroy()
 			})
 			window.Show()
 		}
-		task.SavePath = downloader.Downloader.SavePath + "/" + task.FileName
-		err = downloader.Downloader.AddTask(task)
+		task.SavePath = Downloader.SavePath + "/" + task.FileName
+		err = Downloader.AddTask(task)
 		if err != nil {
 			ui.MsgBoxError(MainWin, "错误", fmt.Sprintln(err))
 			return
 		}
-		main.downloadDirect(fileId)
-		input.SetText("")
-		main.fileQueue.Enqueue(fileId)
-		dpmh[0].RowFileId = append(dpmh[0].RowFileId, fileId)
-		rowCount++
-		model[0].RowInserted(rowCount - 1)
-		main.sch <- struct{}{}
 	})
 	return vbox
 }

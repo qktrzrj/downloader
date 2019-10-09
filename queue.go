@@ -1,4 +1,4 @@
-package downloader
+package main
 
 import (
 	"github.com/cheekybits/genny/generic"

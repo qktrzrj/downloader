@@ -1,7 +1,6 @@
-package downloader
+package main
 
 import (
-	"downloader/ui"
 	"errors"
 	"fmt"
 	"github.com/valyala/fasthttp"
@@ -49,6 +48,7 @@ type Task struct {
 	speedCountChan    chan struct{}
 	speedCount        float64
 	Event             *TaskEvent
+	BufferPool        *sync.Pool
 	client            *fasthttp.HostClient
 }
 
@@ -92,6 +92,7 @@ func (task *Task) Start() error {
 			return
 		}
 		go task.speedCalculate()
+		go task.barCalcuate()
 		for i := 0; i < Downloader.MaxRoutineNum; i++ {
 			task.bts[i] = &bt{
 				id:   i,
@@ -156,7 +157,22 @@ func (task *Task) speedCalculate() {
 			return
 		case <-t:
 			task.speedCount = (float64(task.downloadCount) - float64(preDownCount)) / 1024
-			ui.DpModel.RowChanged(0)
+		}
+	}
+}
+
+// 计算下载进度
+func (task *Task) barCalcuate() {
+	for {
+		select {
+		case <-task.speedCountChan:
+			return
+		default:
+			row, err := Downloader.getRow(task.Id(), true)
+			if err != nil {
+				return
+			}
+			DpModel.RowChanged(row)
 		}
 	}
 }
@@ -192,14 +208,6 @@ func (task *Task) segErr(segment *SegMent) {
 	task.undistributedLock.Lock()
 	defer task.undistributedLock.Unlock()
 	task.undistributed = append(task.undistributed[1:], task.undistributed...)
-	task.undistributed[0] = segment
-}
-
-// 下载成功，将片段放回
-func (task *Task) segSuccess(segment *SegMent) {
-	task.undistributedLock.Lock()
-	defer task.undistributedLock.Unlock()
-	task. = append(task.undistributed[1:], task.undistributed...)
 	task.undistributed[0] = segment
 }
 

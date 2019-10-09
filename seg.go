@@ -1,4 +1,4 @@
-package downloader
+package main
 
 type SegMent struct {
 	Start int64

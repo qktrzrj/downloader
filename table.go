@@ -1,7 +1,6 @@
-package ui
+package main
 
 import (
-	"downloader/downloader"
 	"github.com/andlabs/ui"
 	"strconv"
 )
@@ -30,14 +29,14 @@ func (modelhandler *modelHandler) ColumnTypes(m *ui.TableModel) []ui.TableValue 
 
 func (modelhandler *modelHandler) NumRows(m *ui.TableModel) int {
 	if modelhandler.lab == 1 {
-		return len(downloader.Downloader.ActiveTaskMap)
+		return len(Downloader.ActiveTaskMap)
 	}
-	return len(downloader.Downloader.CompleteTaskMap)
+	return len(Downloader.CompleteTaskMap)
 }
 
 func (modelhandler *modelHandler) CellValue(m *ui.TableModel, row, column int) ui.TableValue {
 	maxCol := modelhandler.colNum
-	task := downloader.Downloader
+	task := Downloader
 	if modelhandler.lab == 0 {
 		maxCol -= 3
 		switch column {
