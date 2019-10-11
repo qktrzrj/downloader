@@ -154,6 +154,7 @@ func (d *downloader) cancelTask(id taskId) {
 		ui.MsgBoxError(MainWin, "错误", "任务不存在")
 	}
 	go task.Exit()
+	task.file = nil
 	_ = os.Remove(task.SavePath)
 	row := Downloader.getRow(id, true)
 	Downloader.ActiveRowToTaskId = append(append([]taskId{}, Downloader.ActiveRowToTaskId[:row]...),
