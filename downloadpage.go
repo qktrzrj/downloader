@@ -6,9 +6,8 @@ import (
 )
 
 var (
-	rowCount int
-	dpMh     *modelHandler
-	DpModel  *ui.TableModel
+	dpMh    *modelHandler
+	DpModel *ui.TableModel
 )
 
 func downloadingPage() ui.Control {
@@ -21,28 +20,30 @@ func downloadingPage() ui.Control {
 	vbox.Append(hbox, false)
 	// 下载输入框和按钮
 	input := ui.NewEntry()
-	downloadButton := ui.NewButton("下载")
+	downloadButton := ui.NewButton("下 载")
 	hbox.Append(input, true)
 	hbox.Append(downloadButton, false)
-	dpMh = newModelHandler(0, 7)
+	dpMh = newModelHandler(0, 9)
 	DpModel = ui.NewTableModel(dpMh)
 	table := ui.NewTable(&ui.TableParams{
 		Model:                         DpModel,
-		RowBackgroundColorModelColumn: 2,
+		RowBackgroundColorModelColumn: -1,
 	})
 	vbox.Append(table, true)
 	// 初始化列
-	table.AppendTextColumn("", 0, ui.TableModelColumnNeverEditable,
-		&ui.TableTextColumnOptionalParams{ColorModelColumn: -1})
-	table.AppendTextColumn("文件名", 1, ui.TableModelColumnAlwaysEditable, nil)
-	table.AppendTextColumn("保存路径", 2, ui.TableModelColumnAlwaysEditable, nil)
-	table.AppendTextColumn("url", 3, ui.TableModelColumnAlwaysEditable, nil)
+	table.AppendTextColumn("", 0, ui.TableModelColumnNeverEditable, nil)
+	table.AppendTextColumn("文件名", 1, ui.TableModelColumnNeverEditable, nil)
+	table.AppendTextColumn("保存路径", 2, ui.TableModelColumnNeverEditable, nil)
+	table.AppendTextColumn("url", 3, ui.TableModelColumnNeverEditable, nil)
 	table.AppendProgressBarColumn("进度", 4)
-	table.AppendButtonColumn("", 5, ui.TableModelColumnAlwaysEditable)
-	table.AppendButtonColumn("", 6, ui.TableModelColumnAlwaysEditable)
+	table.AppendTextColumn("下载速度", 5, ui.TableModelColumnNeverEditable, nil)
+	table.AppendTextColumn("剩余时间", 6, ui.TableModelColumnNeverEditable, nil)
+	table.AppendButtonColumn("", 7, ui.TableModelColumnAlwaysEditable)
+	table.AppendButtonColumn("", 8, ui.TableModelColumnAlwaysEditable)
 
 	downloadButton.OnClicked(func(button *ui.Button) {
 		url := input.Text()
+		input.SetText("")
 		if url == "" {
 			ui.MsgBoxError(MainWin, "错误", "请输入下载链接!")
 			return
@@ -53,32 +54,51 @@ func downloadingPage() ui.Control {
 			return
 		}
 		// 当文件名重复时
-		if !Downloader.FileIsNotExist(Downloader.SavePath + "/" + task.FileName) {
-			window := ui.NewWindow("提示", 400, 200, false)
+		if Downloader.FileExist(Downloader.SavePath + task.FileName) {
+			window := ui.NewWindow("提示", 300, 100, false)
 			window.SetMargined(true)
 			box := ui.NewVerticalBox()
 			window.SetChild(box)
 			box.Append(ui.NewLabel("文件名已存在,请重命名！"), false)
-			nbox := ui.NewHorizontalBox()
-			vbox.Append(nbox, false)
+			hbox := ui.NewHorizontalBox()
+			box.Append(hbox, false)
 			name := ui.NewEntry()
-			getName := ui.NewButton("保存")
-			nbox.Append(name, true)
-			nbox.Append(getName, false)
+			name.SetText(task.FileName)
+			getName := ui.NewButton("保 存")
+			hbox.Append(name, true)
+			hbox.Append(getName, false)
 			getName.OnClicked(func(innerButton *ui.Button) {
-				if !Downloader.FileIsNotExist(task.SavePath + "/" + name.Text()) {
+				if name.Text() == "" {
+					ui.MsgBoxError(window, "错误", "文件名错误！")
+					return
+				} else if Downloader.FileExist(task.SavePath + name.Text()) {
 					ui.MsgBoxError(window, "错误", "文件名重复！")
+					return
+				} else {
+					task.FileName = name.Text()
+					task.SavePath = Downloader.SavePath + task.FileName
+					err = Downloader.AddTask(task)
+					if err != nil {
+						ui.MsgBoxError(MainWin, "错误", fmt.Sprintln(err))
+						return
+					}
+					MainWin.Enable()
+					window.Destroy()
 				}
-				task.FileName = name.Text()
-				window.Destroy()
 			})
+			window.OnClosing(func(window *ui.Window) bool {
+				MainWin.Enable()
+				return true
+			})
+			MainWin.Disable()
 			window.Show()
-		}
-		task.SavePath = Downloader.SavePath + "/" + task.FileName
-		err = Downloader.AddTask(task)
-		if err != nil {
-			ui.MsgBoxError(MainWin, "错误", fmt.Sprintln(err))
-			return
+		} else {
+			task.SavePath = Downloader.SavePath + task.FileName
+			err = Downloader.AddTask(task)
+			if err != nil {
+				ui.MsgBoxError(MainWin, "错误", fmt.Sprintln(err))
+				return
+			}
 		}
 	})
 	return vbox

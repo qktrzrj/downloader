@@ -91,6 +91,9 @@ func GetFileTask(url string, client *fasthttp.HostClient) (task *Task, err error
 	if err != nil {
 		return task, fmt.Errorf("请求目标文件信息失败: %w", err)
 	}
+	if resp.StatusCode() != fasthttp.StatusOK {
+		return task, fmt.Errorf("请求目标文件信息失败: %v", resp.StatusCode())
+	}
 	// 判断是否支持断点续传
 	var renewal = false
 	if temp := resp.Header.Peek("Accept-Ranges"); len(temp) != 0 {
@@ -143,35 +146,4 @@ func getRequest(url string, start int, end int) *fasthttp.Request {
 	request := fasthttp.AcquireRequest()
 	request.Header = head
 	return request
-}
-
-func send(req *fasthttp.Request, segment SegMent, fileId int) {
-	fileInfo := readFileMap(fileId)
-	if segment.Complete {
-		return
-	}
-	if segment.Cache != nil {
-		fileInfo.FileChan <- segment.Index
-		return
-	}
-	resp := fasthttp.AcquireResponse()
-	defer fasthttp.ReleaseResponse(resp)
-	defer fasthttp.ReleaseRequest(req)
-	err := fileInfo.Client.Do(req, resp)
-	if err != nil || (resp.StatusCode() != 200 && resp.StatusCode() != 206) {
-		segment.Count++
-		main.updateSegIndex(fileId, segment.Index, segment)
-		if segment.Count >= 3 {
-			close(main.fileMap[fileId].Exit)
-			return
-		}
-		// 退出当前活动队列，进行任务队列重排
-		<-activeTaskList[fileId]
-		taskList[fileId] <- segment
-		return
-	}
-	segment.Cache = resp.Body()
-	main.updateSegIndex(fileId, segment.Index, segment)
-	fileInfo.FileChan <- segment.Index
-	return
 }

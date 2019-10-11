@@ -21,7 +21,7 @@ func SetUI() func() {
 }
 
 func setUI() {
-	MainWin = ui.NewWindow("下载器", 800, 480, false)
+	MainWin = ui.NewWindow("下载器", 1000, 480, true)
 	MainWin.OnClosing(func(*ui.Window) bool {
 		ui.Quit()
 		return true

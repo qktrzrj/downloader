@@ -19,6 +19,22 @@ const (
 	Errored
 )
 
+var TaskStatusMap map[int]string = map[int]string{
+	Waiting:     "等待",
+	Downloading: "下载中",
+	Over:        "下载完成",
+	Paused:      "暂停",
+	Errored:     "下载出错",
+}
+
+// what can do when task stay slow status
+var DpStatusMap map[int]string = map[int]string{
+	Waiting:     "暂停",
+	Downloading: "暂停",
+	Paused:      "继续",
+	Errored:     "重新下载",
+}
+
 // 任务事件
 type TaskEvent struct {
 	Resume chan struct{}
@@ -32,16 +48,18 @@ type Task struct {
 	renewal           bool // 是否支持断点续传
 	Status            int  //下载状态
 	fileLength        int64
-	downloadCount     int64 // 已下载片段数
+	downloadCount     int64   // 已下载片段数
+	remainingTime     float64 //剩余时间
 	Url               string
 	finalLink         string
 	file              *os.File
 	FileName          string
 	SavePath          string
 	undistributed     []*SegMent // 尚未分配的片段
-	writeToDisk       []*SegMent // 文件内容写入磁盘的情况
 	undistributedLock sync.Mutex
+	writeToDisk       []*SegMent
 	writeToDiskLock   sync.Mutex
+	btNum             int32
 	bts               map[int]*bt
 	btCancel          chan struct{}
 	btLock            sync.Mutex
@@ -59,7 +77,7 @@ func (task *Task) Id() taskId {
 
 // 任务初始化
 func (task *Task) init() (err error) {
-	task.file, err = os.OpenFile(task.SavePath, os.O_WRONLY|os.O_TRUNC, 0644)
+	task.file, err = os.OpenFile(task.SavePath, os.O_CREATE|os.O_RDWR|os.O_SYNC, 0644)
 	if err != nil {
 		return fmt.Errorf("打开本地文件错误:%w", err)
 	}
@@ -67,14 +85,15 @@ func (task *Task) init() (err error) {
 	task.btCancel, task.speedCountChan = make(chan struct{}), make(chan struct{})
 	// 初始化bt
 	task.bts = make(map[int]*bt)
-	task.undistributed = append(task.undistributed, &SegMent{
+	task.undistributed = append([]*SegMent{}, &SegMent{
 		Start: 0,
 		End:   task.fileLength,
 	})
-	if len(task.writeToDisk) != 0 {
+	task.downloadCount = 0
+	if len(task.writeToDisk) > 0 {
 		for _, segment := range task.writeToDisk {
-			task.removeSeg(task.undistributed, segment)
-			task.downloadCount = task.downloadCount + segment.End - segment.Start + 1
+			task.undistributed = task.removeSeg(task.undistributed, segment)
+			task.downloadCount += Downloader.SegSize
 		}
 	}
 	return
@@ -92,28 +111,35 @@ func (task *Task) Start() error {
 			return
 		}
 		go task.speedCalculate()
-		go task.barCalcuate()
+		//go task.barCalcuate()
 		for i := 0; i < Downloader.MaxRoutineNum; i++ {
 			task.bts[i] = &bt{
 				id:   i,
 				task: task,
 			}
+			//atomic.AddInt32(&task.btNum, 1)
 			go func(bt *bt) {
 				bt.start()
 				task.btLock.Lock()
-				defer task.btLock.Unlock()
 				delete(task.bts, bt.id)
-				log.Println(fmt.Sprintf("task %s, worker %d exit", task.id, bt.id))
+				task.btLock.Unlock()
+				//atomic.AddInt32(&task.btNum, -1)
+				log.Println(fmt.Sprintf("task %d, worker %d exit", task.id, bt.id))
 				if len(task.bts) == 0 {
-					go task.Exit()
-					task.Status = Over
-					Downloader.Event <- DownloadEvent{
-						TaskId: task.Id(),
-						Enum:   Success,
+					if task.Status == Paused {
+						log.Println(fmt.Sprintf("任务:%d 暂停成功！", task.Id()))
+						MainWin.Enable()
+						DpModel.RowChanged(Downloader.getRow(task.Id(), true))
+					}
+					if task.Status == Downloading {
+						task.Status = Over
+						Downloader.Event <- DownloadEvent{
+							TaskId: task.Id(),
+							Enum:   Success,
+						}
 					}
 				}
 			}(task.bts[i])
-			go task.listen()
 		}
 	}()
 	return nil
@@ -121,30 +147,11 @@ func (task *Task) Start() error {
 
 // 退出任务
 func (task *Task) Exit() {
+	if len(task.bts) != 0 {
+		close(task.btCancel)
+	}
 	close(task.speedCountChan)
 	_ = task.file.Close()
-}
-
-// 事件监听
-func (task *Task) listen() {
-	for {
-		select {
-		case <-task.Event.Pause:
-			go task.Exit()
-			close(task.btCancel)
-			task.Status = Paused
-		case <-task.Event.Resume:
-			_ = task.Start()
-		case <-task.Event.Cancel:
-			go task.Exit()
-			if len(task.bts) != 0 {
-				close(task.btCancel)
-			}
-		case <-task.Event.Error:
-			task.Status = Errored
-			go task.Exit()
-		}
-	}
 }
 
 // 计算下载速度
@@ -154,25 +161,12 @@ func (task *Task) speedCalculate() {
 		preDownCount := task.downloadCount
 		select {
 		case <-task.speedCountChan:
+			task.speedCount = 0
 			return
 		case <-t:
 			task.speedCount = (float64(task.downloadCount) - float64(preDownCount)) / 1024
-		}
-	}
-}
-
-// 计算下载进度
-func (task *Task) barCalcuate() {
-	for {
-		select {
-		case <-task.speedCountChan:
-			return
-		default:
-			row, err := Downloader.getRow(task.Id(), true)
-			if err != nil {
-				return
-			}
-			DpModel.RowChanged(row)
+			task.remainingTime = (float64(task.fileLength-task.downloadCount) / 1024) / task.speedCount
+			DpModel.RowChanged(Downloader.getRow(task.Id(), true))
 		}
 	}
 }
@@ -185,7 +179,7 @@ func (task *Task) getSeg() *SegMent {
 	if length == 0 {
 		return nil
 	}
-	segment := task.undistributed[0]
+	segment := task.undistributed[length-1]
 	if segment.End-segment.Start+1 > Downloader.SegSize {
 		seg1 := &SegMent{
 			Start: segment.Start,
@@ -195,10 +189,11 @@ func (task *Task) getSeg() *SegMent {
 			Start: seg1.End + 1,
 			End:   segment.End,
 		}
-		task.undistributed[0] = seg2
+		task.undistributed = task.undistributed[:length-1]
+		task.undistributed = append(task.undistributed, seg2)
 		segment = seg1
 	} else {
-		task.undistributed = task.undistributed[1:]
+		task.undistributed = task.undistributed[:length-1]
 	}
 	return segment
 }
@@ -207,8 +202,7 @@ func (task *Task) getSeg() *SegMent {
 func (task *Task) segErr(segment *SegMent) {
 	task.undistributedLock.Lock()
 	defer task.undistributedLock.Unlock()
-	task.undistributed = append(task.undistributed[1:], task.undistributed...)
-	task.undistributed[0] = segment
+	task.undistributed = append(task.undistributed, segment)
 }
 
 // 除去指定长度段的segment
