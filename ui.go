@@ -3,18 +3,8 @@ package main
 import "github.com/andlabs/ui"
 
 var (
-	MainWin       *ui.Window
-	UIChangeEvent *UIEvent
+	MainWin *ui.Window
 )
-
-type UIEvent struct {
-	DpInsert chan int
-	DpRemove chan int
-	DpChange chan int
-	CpInsert chan int
-	CpRemove chan int
-	CpChange chan int
-}
 
 func SetUI() func() {
 	return setUI
@@ -22,6 +12,7 @@ func SetUI() func() {
 
 func setUI() {
 	MainWin = ui.NewWindow("下载器", 1000, 480, true)
+	MainWin.SetBorderless(false)
 	MainWin.OnClosing(func(*ui.Window) bool {
 		ui.Quit()
 		return true

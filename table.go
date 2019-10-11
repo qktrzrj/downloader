@@ -151,6 +151,13 @@ func (modelhandler *modelHandler) SetCellValue(m *ui.TableModel, row, column int
 				}
 				Downloader.Event <- event
 			}
+		case 8:
+			// 取消
+			event := DownloadEvent{
+				TaskId: id,
+				Enum:   Cancel,
+			}
+			Downloader.Event <- event
 		}
 	}
 }

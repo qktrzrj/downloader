@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"github.com/andlabs/ui"
+	"strings"
 )
 
 var (
@@ -53,53 +54,64 @@ func downloadingPage() ui.Control {
 			ui.MsgBoxError(MainWin, "错误", fmt.Sprintln(err))
 			return
 		}
-		// 当文件名重复时
-		if Downloader.FileExist(Downloader.SavePath + task.FileName) {
-			window := ui.NewWindow("提示", 300, 100, false)
-			window.SetMargined(true)
-			box := ui.NewVerticalBox()
-			window.SetChild(box)
-			box.Append(ui.NewLabel("文件名已存在,请重命名！"), false)
-			hbox := ui.NewHorizontalBox()
-			box.Append(hbox, false)
-			name := ui.NewEntry()
-			name.SetText(task.FileName)
-			getName := ui.NewButton("保 存")
-			hbox.Append(name, true)
-			hbox.Append(getName, false)
-			getName.OnClicked(func(innerButton *ui.Button) {
-				if name.Text() == "" {
-					ui.MsgBoxError(window, "错误", "文件名错误！")
-					return
-				} else if Downloader.FileExist(task.SavePath + name.Text()) {
-					ui.MsgBoxError(window, "错误", "文件名重复！")
-					return
-				} else {
-					task.FileName = name.Text()
-					task.SavePath = Downloader.SavePath + task.FileName
-					err = Downloader.AddTask(task)
-					if err != nil {
-						ui.MsgBoxError(MainWin, "错误", fmt.Sprintln(err))
-						return
-					}
-					MainWin.Enable()
-					window.Destroy()
-				}
-			})
-			window.OnClosing(func(window *ui.Window) bool {
-				MainWin.Enable()
-				return true
-			})
-			MainWin.Disable()
-			window.Show()
-		} else {
-			task.SavePath = Downloader.SavePath + task.FileName
-			err = Downloader.AddTask(task)
-			if err != nil {
-				ui.MsgBoxError(MainWin, "错误", fmt.Sprintln(err))
-				return
-			}
+		filePath := ui.SaveFile(MainWin)
+		if filePath == "" {
+			return
 		}
+		task.SavePath = filePath
+		task.FileName = filePath[strings.LastIndex(filePath, "\\")+1:]
+		err = Downloader.AddTask(task)
+		if err != nil {
+			ui.MsgBoxError(MainWin, "错误", fmt.Sprintln(err))
+			return
+		}
+		// 当文件名重复时
+		//if Downloader.FileExist(Downloader.SavePath + task.FileName) {
+		//	window := ui.NewWindow("提示", 300, 100, false)
+		//	window.SetMargined(true)
+		//	box := ui.NewVerticalBox()
+		//	window.SetChild(box)
+		//	box.Append(ui.NewLabel("文件名已存在,请重命名！"), false)
+		//	hbox := ui.NewHorizontalBox()
+		//	box.Append(hbox, false)
+		//	name := ui.NewEntry()
+		//	name.SetText(task.FileName)
+		//	getName := ui.NewButton("保 存")
+		//	hbox.Append(name, true)
+		//	hbox.Append(getName, false)
+		//	getName.OnClicked(func(innerButton *ui.Button) {
+		//		if name.Text() == "" {
+		//			ui.MsgBoxError(window, "错误", "文件名错误！")
+		//			return
+		//		} else if Downloader.FileExist(task.SavePath + name.Text()) {
+		//			ui.MsgBoxError(window, "错误", "文件名重复！")
+		//			return
+		//		} else {
+		//			task.FileName = name.Text()
+		//			task.SavePath = Downloader.SavePath + task.FileName
+		//			err = Downloader.AddTask(task)
+		//			if err != nil {
+		//				ui.MsgBoxError(MainWin, "错误", fmt.Sprintln(err))
+		//				return
+		//			}
+		//			MainWin.Enable()
+		//			window.Destroy()
+		//		}
+		//	})
+		//	window.OnClosing(func(window *ui.Window) bool {
+		//		MainWin.Enable()
+		//		return true
+		//	})
+		//	MainWin.Disable()
+		//	window.Show()
+		//} else {
+		//	task.SavePath = Downloader.SavePath + task.FileName
+		//	err = Downloader.AddTask(task)
+		//	if err != nil {
+		//		ui.MsgBoxError(MainWin, "错误", fmt.Sprintln(err))
+		//		return
+		//	}
+		//}
 	})
 	return vbox
 }
