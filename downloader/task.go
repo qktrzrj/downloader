@@ -1,9 +1,11 @@
-package main
+package downloader
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
-	"github.com/valyala/fasthttp"
+	"github.com/guonaihong/gout"
+	"io"
 	"log"
 	"os"
 	"sync"
@@ -12,7 +14,7 @@ import (
 
 // 任务状态
 const (
-	Waiting = iota
+	Waiting = iota + 1
 	Downloading
 	Over
 	Paused
@@ -57,8 +59,8 @@ type Task struct {
 	SavePath          string
 	undistributed     []*SegMent // 尚未分配的片段
 	undistributedLock sync.Mutex
-	writeToDisk       []*SegMent
-	writeToDiskLock   sync.Mutex
+	completed         []*SegMent
+	completedLock     sync.Mutex
 	btNum             int32
 	bts               map[int]*bt
 	btCancel          chan struct{}
@@ -67,7 +69,7 @@ type Task struct {
 	speedCount        float64
 	Event             *TaskEvent
 	BufferPool        *sync.Pool
-	client            *fasthttp.HostClient
+	client            *gout.Gout
 }
 
 func (task *Task) Id() taskId {
@@ -81,19 +83,30 @@ func (task *Task) init() (err error) {
 	if err != nil {
 		return fmt.Errorf("打开本地文件错误:%w", err)
 	}
-	task.undistributedLock, task.btLock, task.writeToDiskLock = sync.Mutex{}, sync.Mutex{}, sync.Mutex{}
 	task.btCancel, task.speedCountChan = make(chan struct{}), make(chan struct{})
+	// 创建控制器
+	task.Event = &TaskEvent{
+		Resume: make(chan struct{}),
+		Pause:  make(chan struct{}),
+		Cancel: make(chan struct{}),
+	}
+	// 建立缓存
+	task.BufferPool = &sync.Pool{
+		New: func() interface{} {
+			return bytes.NewBuffer(make([]byte, 0, Download.SegSize))
+		},
+	}
 	// 初始化bt
 	task.bts = make(map[int]*bt)
 	task.undistributed = append([]*SegMent{}, &SegMent{
-		Start: 0,
-		End:   task.fileLength,
+		start: 0,
+		end:   task.fileLength,
 	})
 	task.downloadCount = 0
-	if len(task.writeToDisk) > 0 {
-		for _, segment := range task.writeToDisk {
+	if len(task.completed) > 0 {
+		for _, segment := range task.completed {
 			task.undistributed = task.removeSeg(task.undistributed, segment)
-			task.downloadCount += Downloader.SegSize
+			task.downloadCount += Download.SegSize
 		}
 	}
 	return
@@ -110,30 +123,24 @@ func (task *Task) Start() error {
 			task.Status = Errored
 			return
 		}
-		go task.speedCalculate()
-		//go task.barCalcuate()
-		for i := 0; i < Downloader.MaxRoutineNum; i++ {
+		for i := 0; i < Download.MaxRoutineNum; i++ {
 			task.bts[i] = &bt{
 				id:   i,
 				task: task,
 			}
-			//atomic.AddInt32(&task.btNum, 1)
 			go func(bt *bt) {
 				bt.start()
 				task.btLock.Lock()
 				delete(task.bts, bt.id)
 				task.btLock.Unlock()
-				//atomic.AddInt32(&task.btNum, -1)
 				log.Println(fmt.Sprintf("task %d, worker %d exit", task.id, bt.id))
 				if len(task.bts) == 0 {
 					if task.Status == Paused {
 						log.Println(fmt.Sprintf("任务:%d 暂停成功！", task.Id()))
-						MainWin.Enable()
-						DpModel.RowChanged(Downloader.getRow(task.Id(), true))
 					}
 					if task.Status == Downloading {
 						task.Status = Over
-						Downloader.Event <- DownloadEvent{
+						Download.Event <- DownloadEvent{
 							TaskId: task.Id(),
 							Enum:   Success,
 						}
@@ -166,7 +173,6 @@ func (task *Task) speedCalculate() {
 		case <-t:
 			task.speedCount = (float64(task.downloadCount) - float64(preDownCount)) / 1024
 			task.remainingTime = (float64(task.fileLength-task.downloadCount) / 1024) / task.speedCount
-			DpModel.RowChanged(Downloader.getRow(task.Id(), true))
 		}
 	}
 }
@@ -180,14 +186,16 @@ func (task *Task) getSeg() *SegMent {
 		return nil
 	}
 	segment := task.undistributed[length-1]
-	if segment.End-segment.Start+1 > Downloader.SegSize {
+	if segment.end-segment.start+1 > Download.SegSize {
 		seg1 := &SegMent{
-			Start: segment.Start,
-			End:   segment.Start + Downloader.SegSize - 1,
+			start:  segment.start,
+			end:    segment.start + Download.SegSize,
+			finish: segment.start,
 		}
 		seg2 := &SegMent{
-			Start: seg1.End + 1,
-			End:   segment.End,
+			start:  seg1.end,
+			end:    segment.end,
+			finish: seg1.end,
 		}
 		task.undistributed = task.undistributed[:length-1]
 		task.undistributed = append(task.undistributed, seg2)
@@ -205,27 +213,50 @@ func (task *Task) segErr(segment *SegMent) {
 	task.undistributed = append(task.undistributed, segment)
 }
 
+// 写入文件
+func (task *Task) writeToDisk(segment *SegMent, buffer *bytes.Buffer) error {
+	seek, err := task.file.Seek(segment.start, io.SeekStart)
+	if err != nil {
+		return err
+	}
+	if seek != segment.start {
+		return errors.New("文件操作失败")
+	}
+	write, err := buffer.WriteTo(task.file)
+	if err != nil {
+		return err
+	}
+	if write != segment.finish-segment.start {
+		return errors.New("文件写入失败")
+	}
+	task.file.Sync()
+	task.completedLock.Lock()
+	task.completed = append(task.completed, segment)
+	task.completedLock.Unlock()
+	return nil
+}
+
 // 除去指定长度段的segment
 func (task *Task) removeSeg(seg []*SegMent, segment *SegMent) []*SegMent {
 	for index := 0; index < len(seg); index++ {
 		segIn := seg[index]
-		if segIn.Start <= segment.Start && segIn.End >= segment.End {
-			if segIn.Start == segment.Start && segIn.End == segment.End {
+		if segIn.start <= segment.start && segIn.end >= segment.end {
+			if segIn.start == segment.start && segIn.end == segment.end {
 				return append(seg[:index], seg[index+1:]...)
 			}
-			if segIn.Start == segment.Start {
-				segIn.Start = segment.End + 1
+			if segIn.start == segment.start {
+				segIn.start = segment.end + 1
 				return seg
 			}
-			if segIn.End == segment.End {
-				segIn.End = segment.Start - 1
+			if segIn.end == segment.end {
+				segIn.end = segment.start - 1
 				return seg
 			}
 			segInsert := &SegMent{
-				Start: segment.End + 1,
-				End:   segIn.End,
+				start: segment.end + 1,
+				end:   segIn.end,
 			}
-			segIn.End = segment.Start - 1
+			segIn.end = segment.start - 1
 			real := append([]*SegMent{}, seg[index+1:]...)
 			return append(append(seg[:index+1], segInsert), real...)
 		}
