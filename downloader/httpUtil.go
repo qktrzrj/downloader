@@ -16,11 +16,12 @@ type FileInfo struct {
 	FinalLink string
 	SavePath  string
 	MD5       string
+	FileType  string
 	Length    int64
 }
 
 // 生产gout实例
-func newGout() *gout.Gout {
+func NewGout() *gout.Gout {
 	client := &http.Client{
 		CheckRedirect: func(req *http.Request, via []*http.Request) error {
 			req.Header.Del("Referer")
@@ -76,6 +77,7 @@ func GetFileInfo(url string, g *gout.Gout) (fileInfo FileInfo, err error) {
 		fileInfo.FileName = string(u[s:])
 	} else {
 		fileInfo.FileName = string(u[s+1:])
+		fileInfo.FileType = fileInfo.FileName[strings.LastIndex(fileInfo.FileName, ".")+1:]
 	}
 	return
 }

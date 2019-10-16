@@ -20,7 +20,7 @@ func TestBt__downSeg(t *testing.T) {
 		MaxActiveTaskNum: 3,
 	}
 	Download.Init()
-	g := newGout()
+	g := NewGout()
 	fileInfo, err := GetFileInfo(url, g)
 	if err != nil {
 		panic(err)

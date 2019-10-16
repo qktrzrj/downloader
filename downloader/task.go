@@ -72,8 +72,8 @@ type Task struct {
 	client            *gout.Gout
 }
 
-func (task *Task) Id() taskId {
-	id := taskId(task.id)
+func (task *Task) Id() TaskId {
+	id := TaskId(task.id)
 	return id
 }
 

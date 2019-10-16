@@ -11,7 +11,7 @@ import (
 	"sync/atomic"
 )
 
-type taskId int
+type TaskId int
 
 // 事件列表
 const (
@@ -41,25 +41,25 @@ type Downloader struct {
 	SavePath            string
 	activeTaskNum       int32
 	MaxActiveTaskNum    int32
-	ActiveTaskMap       map[taskId]*Task //未完成的任务
-	ActiveRowToTaskId   []taskId
-	CompleteTaskMap     map[taskId]*Task //已完成的任务
-	CompleteRowToTaskId []taskId
+	ActiveTaskMap       map[TaskId]*Task //未完成的任务
+	ActiveRowToTaskId   []TaskId
+	CompleteTaskMap     map[TaskId]*Task //已完成的任务
+	CompleteRowToTaskId []TaskId
 	mapLock             sync.Mutex
 	TaskQueue           *ItemQueue
 }
 
 // 下载器事件
 type DownloadEvent struct {
-	TaskId taskId
+	TaskId TaskId
 	Enum   int
 }
 
 // 初始化
 func (d *Downloader) Init() {
 	d.Event = make(chan DownloadEvent, 1)
-	d.ActiveTaskMap, d.CompleteTaskMap = make(map[taskId]*Task), make(map[taskId]*Task)
-	d.ActiveRowToTaskId, d.CompleteRowToTaskId = make([]taskId, 0), make([]taskId, 0)
+	d.ActiveTaskMap, d.CompleteTaskMap = make(map[TaskId]*Task), make(map[TaskId]*Task)
+	d.ActiveRowToTaskId, d.CompleteRowToTaskId = make([]TaskId, 0), make([]TaskId, 0)
 	d.mapLock = sync.Mutex{}
 	taskQueue := &ItemQueue{
 		lock: sync.RWMutex{},
@@ -68,13 +68,13 @@ func (d *Downloader) Init() {
 }
 
 // 添加任务
-func (d *Downloader) AddTask(fileInfo FileInfo, g *gout.Gout) error {
+func (d *Downloader) AddTask(fileInfo FileInfo, g *gout.Gout) (TaskId, error) {
 	Download.mapLock.Lock()
 	defer Download.mapLock.Unlock()
 	// 创建文件
 	file, err := os.OpenFile(fileInfo.SavePath, os.O_CREATE, 0644)
 	if err != nil {
-		return err
+		return 0, err
 	}
 	_ = file.Close()
 	// 创建任务
@@ -99,11 +99,11 @@ func (d *Downloader) AddTask(fileInfo FileInfo, g *gout.Gout) error {
 	// 维护任务列表
 	Download.ActiveRowToTaskId = append(Download.ActiveRowToTaskId, task.Id())
 	atomic.AddInt32(&Download.activeTaskNum, 1)
-	return nil
+	return task.Id(), nil
 }
 
 // 获取指定任务所在行
-func (d *Downloader) getRow(id taskId, isActive bool) int {
+func (d *Downloader) getRow(id TaskId, isActive bool) int {
 	if isActive {
 		for i := 0; i < len(Download.ActiveRowToTaskId); i++ {
 			if Download.ActiveRowToTaskId[i] == id {
@@ -121,7 +121,7 @@ func (d *Downloader) getRow(id taskId, isActive bool) int {
 }
 
 // 暂停任务
-func (d *Downloader) pauseTask(id taskId) {
+func (d *Downloader) pauseTask(id TaskId) {
 	task, ok := Download.ActiveTaskMap[id]
 	if !ok {
 	}
@@ -130,7 +130,7 @@ func (d *Downloader) pauseTask(id taskId) {
 }
 
 // 继续任务
-func (d *Downloader) resumeTask(id taskId) {
+func (d *Downloader) resumeTask(id TaskId) {
 	task, ok := Download.ActiveTaskMap[id]
 	if !ok {
 	}
@@ -142,7 +142,7 @@ func (d *Downloader) resumeTask(id taskId) {
 }
 
 // 取消任务
-func (d *Downloader) cancelTask(id taskId) {
+func (d *Downloader) cancelTask(id TaskId) {
 	Download.mapLock.Lock()
 	defer Download.mapLock.Unlock()
 	task, ok := Download.ActiveTaskMap[id]
@@ -152,19 +152,19 @@ func (d *Downloader) cancelTask(id taskId) {
 	task.file = nil
 	_ = os.Remove(task.SavePath)
 	row := Download.getRow(id, true)
-	Download.ActiveRowToTaskId = append(append([]taskId{}, Download.ActiveRowToTaskId[:row]...),
+	Download.ActiveRowToTaskId = append(append([]TaskId{}, Download.ActiveRowToTaskId[:row]...),
 		Download.ActiveRowToTaskId[row+1:]...)
 	delete(Download.ActiveTaskMap, id)
 }
 
 // 任务完成
-func (d *Downloader) successTask(id taskId) {
+func (d *Downloader) successTask(id TaskId) {
 	Download.mapLock.Lock()
 	defer Download.mapLock.Unlock()
 	task, _ := Download.ActiveTaskMap[id]
 	// 将任务转移到完成界面
 	row := Download.getRow(id, true)
-	Download.ActiveRowToTaskId = append(append([]taskId{}, Download.ActiveRowToTaskId[:row]...),
+	Download.ActiveRowToTaskId = append(append([]TaskId{}, Download.ActiveRowToTaskId[:row]...),
 		Download.ActiveRowToTaskId[row+1:]...)
 	delete(Download.ActiveTaskMap, id)
 	_ = task.file.Close()
@@ -175,7 +175,7 @@ func (d *Downloader) successTask(id taskId) {
 }
 
 // 打开文件
-func (d *Downloader) openTask(id taskId) {
+func (d *Downloader) openTask(id TaskId) {
 	task, ok := Download.CompleteTaskMap[id]
 	if !ok {
 		return
@@ -192,12 +192,12 @@ func (d *Downloader) openTask(id taskId) {
 }
 
 // 删除已完成任务
-func (d *Downloader) removeTask(id taskId) {
+func (d *Downloader) removeTask(id TaskId) {
 	task, ok := Download.CompleteTaskMap[id]
 	if !ok {
 	}
 	row := Download.getRow(id, false)
-	Download.CompleteRowToTaskId = append(append([]taskId{}, Download.CompleteRowToTaskId[:row]...),
+	Download.CompleteRowToTaskId = append(append([]TaskId{}, Download.CompleteRowToTaskId[:row]...),
 		Download.CompleteRowToTaskId[row+1:]...)
 	delete(Download.CompleteTaskMap, task.Id())
 	//main.CpModel.RowDeleted(row)
@@ -239,7 +239,7 @@ func (d *Downloader) FileExist(path string) bool {
 // 任务调度
 func (d *Downloader) Schedule() {
 	if d.activeTaskNum <= d.MaxActiveTaskNum && !d.TaskQueue.IsEmpty() {
-		id := (*d.TaskQueue.Dequeue()).(taskId)
+		id := (*d.TaskQueue.Dequeue()).(TaskId)
 		task, ok := d.ActiveTaskMap[id]
 		if !ok {
 			return
