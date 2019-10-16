@@ -12,7 +12,7 @@ import (
 var (
 	MainWin  *widgets.QMainWindow
 	Widget   *widgets.QWidget
-	List     *widgets.QListWidget
+	List     *widgets.QWidget
 	ListData []*ListItem
 	ListLock sync.Mutex
 )
@@ -27,7 +27,7 @@ type ListItem struct {
 func SetUI() {
 	// 设置主窗口
 	MainWin = widgets.NewQMainWindow(nil, 0)
-	MainWin.SetMinimumSize2(400, 200)
+	MainWin.SetMinimumSize2(400, 600)
 	MainWin.SetWindowTitle("Downloader")
 
 	// 设置主窗口界面
@@ -47,16 +47,17 @@ func SetUI() {
 	Widget.Layout().AddWidget(bhw)
 
 	// 添加列表界面
-	vw := widgets.NewQWidget(Widget, core.Qt__WindowStaysOnBottomHint)
-	vw.SetLayout(widgets.NewQHBoxLayout())
-	//scrollArea := widgets.NewQScrollArea(vw)
-	//scrollArea.SetVerticalScrollBarPolicy(core.Qt__ScrollBarAlwaysOn)
-	//scrollArea.SetHorizontalScrollBarPolicy(core.Qt__ScrollBarAlwaysOn)
-	List = widgets.NewQListWidget(vw)
-	//scrollArea.SetWidget(List)
+	vw := widgets.NewQWidget(Widget, 0)
+	vw.SetMinimumSize2(400, 500)
+	vw.Move2(200, 350)
+	scrollArea := widgets.NewQScrollArea(vw)
+	scrollArea.SetVerticalScrollBarPolicy(core.Qt__ScrollBarAlwaysOff)
+	scrollArea.SetHorizontalScrollBarPolicy(core.Qt__ScrollBarAlwaysOff)
+	List = widgets.NewQWidget(scrollArea, 0)
+	scrollArea.SetWidget(List)
 	//scrollArea.SetWidgetResizable(true)
 	List.SetLayout(widgets.NewQVBoxLayout())
-	vw.Layout().AddWidget(List)
+	//vw.Layout().AddWidget(List)
 	Widget.Layout().AddWidget(vw)
 
 	// 添加下载事件
