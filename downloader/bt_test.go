@@ -25,7 +25,7 @@ func TestBt__downSeg(t *testing.T) {
 	if err != nil {
 		panic(err)
 	}
-	_ = Download.AddTask(fileInfo, g)
+	_, _ = Download.AddTask(fileInfo, g)
 }
 
 func Test__filePath(t *testing.T) {
