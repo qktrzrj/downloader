@@ -6,9 +6,9 @@ import (
 	"downloader/downloader"
 	"downloader/ui"
 	"errors"
+	"github.com/goki/gi/gimain"
 	_ "github.com/mattn/go-sqlite3"
 	_ "github.com/therecipe/env_windows_amd64_513"
-	"github.com/therecipe/qt/widgets"
 	"os"
 	"os/exec"
 	"os/user"
@@ -101,7 +101,7 @@ func main() {
 	downloader.Download.Init()
 	go downloader.Download.ListenEvent()
 	// needs to be called once before you can start using the QWidgets
-	app := widgets.NewQApplication(len(os.Args), os.Args)
-	ui.SetUI()
-	app.Exec()
+	gimain.Main(func() {
+		ui.SetUI()
+	})
 }
