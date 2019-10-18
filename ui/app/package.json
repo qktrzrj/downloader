@@ -1,0 +1,16 @@
+{
+  "name": "app",
+  "productName": "app",
+  "description": "My Electron application description",
+  "keywords": [],
+  "main": "./main.js",
+  "version": "1.0.0",
+  "author": "ly-ycli",
+  "scripts": {
+    "start": "electron ."
+  },
+  "dependencies": {},
+  "devDependencies": {
+    "electron": "7.0.0-beta.7"
+  }
+}
