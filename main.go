@@ -6,7 +6,6 @@ import (
 	"downloader/downloader"
 	"errors"
 	_ "github.com/mattn/go-sqlite3"
-	_ "github.com/therecipe/env_windows_amd64_513"
 	"os"
 	"os/exec"
 	"os/user"
