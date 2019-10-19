@@ -1,0 +1,88 @@
+
+.download{
+    position: absolute;
+    top: 10px;
+    bottom: 10px;
+    left: 10px;
+    right: 25%;
+    background-color: #f0eeeeee;
+    overflow-y: auto;
+    -webkit-user-drag: none;
+    counter-reset: number;
+}
+
+.item{
+    background-color: white;width: 90%;height: 50px;margin-left: 5%;margin-top: 20px;
+}
+
+.item:before{
+    counter-increment: number;
+}
+
+.item-op{
+    float: left;
+    margin: 20px;
+}
+
+.item-info{
+    float: left;
+}
+
+.filename{
+    margin: 5px;
+    font-size: 18px;
+    /* 字体颜色 */
+    color: #000000;
+    -webkit-user-select:none;
+    user-select:none
+}
+
+.filenum{
+    margin-left: 5px;
+    font-size: 12px;
+    /* 字体颜色 */
+    color: #000000;
+    -webkit-user-select:none;
+    user-select:none
+}
+
+.downsize{
+    margin-left: 5px;
+    font-size: 12px;
+    /* 字体颜色 */
+    color: #ccc9c996;
+    -webkit-user-select:none;
+    user-select:none
+}
+
+.filestatus{
+    margin-left: 78%;
+    margin-top: -30px;
+    font-size: 15px;
+    float: left;
+    /* 字体颜色 */
+    color: #ccc9c996;
+    -webkit-user-select:none;
+    user-select:none
+}
+
+.progress{
+    /* background: snow;
+    border:2px solid #437af1; */
+    width:100%;
+    height:2px;
+    float: left;
+    margin-top:-5px;
+    -webkit-appearance: none;
+}
+progress::-webkit-progress-bar
+
+{
+    background-color:#ffffff;
+
+}
+progress::-webkit-progress-value
+
+{
+    background-color:rgba(14, 101, 231, 0.932);
+}

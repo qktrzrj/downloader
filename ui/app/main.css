@@ -1,0 +1,24 @@
+.topbar{
+    /* 顶部栏 */
+    position: absolute;
+    left: 0px;
+    top: 0px;
+    width: 100%;
+    height: 30px;
+    word-wrap:break-word;
+    display:inline-block;
+    background-color: #dfdfdfe5;
+    -webkit-app-region: drag;
+    -webkit-user-select: none;
+}
+
+.app{
+    /* 主面板 */
+    position: absolute;
+    top: 30px;
+    bottom: 0px;
+    left: 0px;
+    right: 0px;
+    background-color: #f0eeeeee;
+    -webkit-user-drag: none;
+}
