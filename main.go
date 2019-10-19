@@ -4,9 +4,7 @@ import (
 	"bytes"
 	"database/sql"
 	"downloader/downloader"
-	"downloader/ui"
 	"errors"
-	"github.com/goki/gi/gimain"
 	_ "github.com/mattn/go-sqlite3"
 	_ "github.com/therecipe/env_windows_amd64_513"
 	"os"
@@ -100,8 +98,4 @@ func main() {
 	}
 	downloader.Download.Init()
 	go downloader.Download.ListenEvent()
-	// needs to be called once before you can start using the QWidgets
-	gimain.Main(func() {
-		ui.SetUI()
-	})
 }
