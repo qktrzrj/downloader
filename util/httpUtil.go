@@ -6,7 +6,6 @@ import (
 	browser "github.com/EDDYCJY/fake-useragent"
 	"net/http"
 	"strings"
-	"time"
 )
 
 type FileInfo struct {
@@ -30,7 +29,6 @@ func NewClient() *http.Client {
 			}
 			return nil
 		},
-		Timeout: time.Second * 60,
 	}
 	return client
 }
@@ -85,10 +83,9 @@ func GetFileInfo(url string, client *http.Client) (fileInfo FileInfo, err error)
 	return
 }
 
-func GetRequest(url string, start int64, end int64) *http.Request {
+func GetRequest(url string) *http.Request {
 	request, _ := http.NewRequest("GET", url, nil)
-	request.Header.Add("User-Agent", browser.Chrome())
-	request.Header.Add("Range", fmt.Sprintf("bytes=%d-%d", start, end))
-	request.Header.Add("Connection", "keep-alive")
+	request.Header.Set("User-Agent", browser.Chrome())
+	request.Header.Set("Connection", "keep-alive")
 	return request
 }

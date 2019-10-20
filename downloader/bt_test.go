@@ -9,10 +9,11 @@ import (
 	"path/filepath"
 	"runtime"
 	"testing"
+	"time"
 )
 
 func TestBt__downSeg(t *testing.T) {
-	url := "https://www.typora.io/windows/typora-setup-x64.exe"
+	url := "https://riotgamespatcher-a.akamaihd.net/KR_Live_Mac/installer/deploy/League of Legends installer KR.dmg"
 	Download = Downloader{
 		MaxRoutineNum:    1,
 		SegSize:          1024 * 1024,
@@ -28,6 +29,7 @@ func TestBt__downSeg(t *testing.T) {
 		panic(err)
 	}
 	fileInfo.SavePath = Download.SavePath
+	fmt.Println(time.Now())
 	_, _ = Download.AddTask(fileInfo, util.NewClient())
 	select {}
 }

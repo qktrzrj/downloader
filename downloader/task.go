@@ -2,6 +2,7 @@ package downloader
 
 import (
 	"bytes"
+	"downloader/util"
 	"errors"
 	"fmt"
 	"io"
@@ -126,8 +127,9 @@ func (task *Task) Start() error {
 		go task.speedCalculate()
 		for i := 0; i < Download.MaxRoutineNum; i++ {
 			task.bts[i] = &bt{
-				id:   i,
-				task: task,
+				id:      i,
+				task:    task,
+				request: util.GetRequest(task.finalLink),
 			}
 			go func(bt *bt) {
 				bt.start()
@@ -190,11 +192,11 @@ func (task *Task) getSeg() *SegMent {
 	if segment.end-segment.start+1 > Download.SegSize {
 		seg1 := &SegMent{
 			start:  segment.start,
-			end:    segment.start + Download.SegSize,
+			end:    segment.start + Download.SegSize - 1,
 			finish: segment.start,
 		}
 		seg2 := &SegMent{
-			start:  seg1.end,
+			start:  seg1.end + 1,
 			end:    segment.end,
 			finish: seg1.end,
 		}
@@ -216,19 +218,16 @@ func (task *Task) segErr(segment *SegMent) {
 
 // 写入文件
 func (task *Task) writeToDisk(segment *SegMent, buffer *bytes.Buffer) error {
-	seek, err := task.file.Seek(segment.start, io.SeekStart)
+	_, err := task.file.Seek(segment.start, io.SeekStart)
 	if err != nil {
 		return err
 	}
-	if seek != segment.start {
-		return errors.New("文件操作失败")
-	}
-	write, err := buffer.WriteTo(task.file)
+	//if seek != segment.start {
+	//	return errors.New("文件操作失败")
+	//}
+	_, err = buffer.WriteTo(task.file)
 	if err != nil {
 		return err
-	}
-	if write != segment.finish-segment.start {
-		return errors.New("文件写入失败")
 	}
 	task.file.Sync()
 	task.completedLock.Lock()

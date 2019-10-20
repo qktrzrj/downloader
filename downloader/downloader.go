@@ -69,6 +69,9 @@ func (d *Downloader) Init() {
 func (d *Downloader) AddTask(fileInfo util.FileInfo, client *http.Client) (TaskId, error) {
 	Download.mapLock.Lock()
 	defer Download.mapLock.Unlock()
+	if d.FileExist(fileInfo.SavePath + fileInfo.FileName) {
+		_ = os.Remove(fileInfo.SavePath + fileInfo.FileName)
+	}
 	// 创建文件
 	file, err := os.OpenFile(fileInfo.SavePath+fileInfo.FileName, os.O_CREATE, 0644)
 	if err != nil {

@@ -2,22 +2,28 @@ package downloader
 
 import (
 	"bytes"
-	"downloader/util"
 	"errors"
 	"fmt"
 	"io"
 	"log"
 	"net/http"
 	"sync/atomic"
+	"time"
 )
 
 type bt struct {
 	id int
 	//ctx  context.Context
-	task *Task
+	task    *Task
+	request *http.Request
 }
 
 func (bt *bt) start() {
+	//ctx, cancel := context.WithCancel(context.TODO())
+	//timer := time.AfterFunc(10*time.Second, func() {
+	//	cancel()
+	//})
+	//bt.request = bt.request.WithContext(ctx)
 	errNum := 0
 	for {
 		if errNum >= 3 && bt.task.Status == Downloading {
@@ -34,7 +40,7 @@ func (bt *bt) start() {
 			if segment == nil {
 				return
 			}
-			err := bt.downSeg(segment)
+			err := bt.downSeg(segment, nil)
 			if err != nil {
 				if segment.finish != segment.start {
 					segment.start = segment.finish + 1
@@ -49,9 +55,9 @@ func (bt *bt) start() {
 	}
 }
 
-func (bt *bt) downSeg(segment *SegMent) (err error) {
-	request := util.GetRequest(bt.task.finalLink, segment.start, segment.end)
-	response, err := bt.task.client.Do(request)
+func (bt *bt) downSeg(segment *SegMent, timer *time.Timer) (err error) {
+	bt.request.Header.Set("Range", fmt.Sprintf("bytes=%d-%d", segment.start, segment.end))
+	response, err := bt.task.client.Do(bt.request)
 	if err != nil {
 		return
 	}
@@ -63,8 +69,8 @@ func (bt *bt) downSeg(segment *SegMent) (err error) {
 	buf := bt.task.BufferPool.Get().(*bytes.Buffer)
 	stream := make([]byte, 1024)
 	buffLeft := 0
-ReadStream:
 	for {
+		//timer.Reset(2 * time.Second)
 		bin := stream[:]
 		buffLeft = buf.Cap() - buf.Len()
 		if buffLeft < len(stream) {
@@ -87,24 +93,24 @@ ReadStream:
 				if err == nil {
 					segment.finish = segment.start + bufLen
 				}
-			} else {
-				err = errors.New("canceled")
 			}
-			break ReadStream
+			err = errors.New("canceled")
+			break
 		}
-		if l > 0 {
-			buf.Write(bin[:l])
-			atomic.AddInt64(&bt.task.DownloadCount, int64(l))
-			if buf.Len() == buf.Cap() || err == io.EOF { // 缓存满了, 或者流尾, 写入磁盘
-				bufLen := int64(buf.Len())
-				writeErr := bt.task.writeToDisk(segment, buf)
-				if writeErr != nil {
-					err = writeErr
-					break
-				}
-				buf.Reset()                             // 重置缓冲区
-				segment.finish = segment.start + bufLen // 片段写入磁盘偏移量
+		if l <= 0 {
+			break
+		}
+		buf.Write(bin[:l])
+		atomic.AddInt64(&bt.task.DownloadCount, int64(l))
+		if buf.Len() == buf.Cap() || err == io.EOF { // 缓存满了, 或者流尾, 写入磁盘
+			bufLen := int64(buf.Len())
+			writeErr := bt.task.writeToDisk(segment, buf)
+			if writeErr != nil {
+				err = writeErr
+				break
 			}
+			buf.Reset()                             // 重置缓冲区
+			segment.finish = segment.start + bufLen // 片段写入磁盘偏移量
 		}
 		if err == io.EOF {
 			err = nil
