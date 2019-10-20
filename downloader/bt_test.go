@@ -15,7 +15,7 @@ import (
 func TestBt__downSeg(t *testing.T) {
 	url := "https://riotgamespatcher-a.akamaihd.net/KR_Live_Mac/installer/deploy/League of Legends installer KR.dmg"
 	Download = Downloader{
-		MaxRoutineNum:    1,
+		MaxRoutineNum:    10,
 		SegSize:          1024 * 1024,
 		BufferSize:       0,
 		SavePath:         "./",
