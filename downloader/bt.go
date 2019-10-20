@@ -2,10 +2,9 @@ package downloader
 
 import (
 	"bytes"
+	"downloader/util"
 	"errors"
 	"fmt"
-	browser "github.com/EDDYCJY/fake-useragent"
-	"github.com/guonaihong/gout"
 	"io"
 	"log"
 	"net/http"
@@ -21,7 +20,7 @@ type bt struct {
 func (bt *bt) start() {
 	errNum := 0
 	for {
-		if errNum >= 3 {
+		if errNum >= 3 && bt.task.Status == Downloading {
 			log.Println(fmt.Sprintf("task %d, worker %d error", bt.task.id, bt.id))
 			bt.task.Status = Errored
 			go bt.task.Exit()
@@ -51,15 +50,16 @@ func (bt *bt) start() {
 }
 
 func (bt *bt) downSeg(segment *SegMent) (err error) {
-	code := 0
-	reader := bytes.Reader{}
-	if err = bt.task.client.GET(bt.task.finalLink).Code(&code).SetHeader(gout.H{"User-Agent": browser.Chrome(),
-		"Range": fmt.Sprintf("bytes=%d-%d", segment.start, segment.end)}).BindBody(reader).Do(); err != nil {
+	request := util.GetRequest(bt.task.finalLink, segment.start, segment.end)
+	response, err := bt.task.client.Do(request)
+	if err != nil {
 		return
 	}
-	if code != http.StatusOK && code != http.StatusPartialContent {
+	defer response.Body.Close()
+	if response.StatusCode != http.StatusOK && response.StatusCode != http.StatusPartialContent {
 		return errors.New("下载错误")
 	}
+	reader := response.Body
 	buf := bt.task.BufferPool.Get().(*bytes.Buffer)
 	stream := make([]byte, 1024)
 	buffLeft := 0
@@ -94,7 +94,7 @@ ReadStream:
 		}
 		if l > 0 {
 			buf.Write(bin[:l])
-			atomic.AddInt64(&bt.task.downloadCount, int64(l))
+			atomic.AddInt64(&bt.task.DownloadCount, int64(l))
 			if buf.Len() == buf.Cap() || err == io.EOF { // 缓存满了, 或者流尾, 写入磁盘
 				bufLen := int64(buf.Len())
 				writeErr := bt.task.writeToDisk(segment, buf)

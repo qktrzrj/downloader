@@ -1,27 +1,27 @@
-package downloader
+package util
 
 import (
 	"errors"
 	"fmt"
-	"github.com/guonaihong/gout"
+	browser "github.com/EDDYCJY/fake-useragent"
 	"net/http"
-	url2 "net/url"
 	"strings"
 	"time"
 )
 
 type FileInfo struct {
-	Renewal   bool
-	FileName  string
-	FinalLink string
-	SavePath  string
-	MD5       string
-	FileType  string
-	Length    int64
+	Id        int    `json:"id"`
+	Renewal   bool   `json:"renewal"`
+	FileName  string `json:"filename"`
+	FinalLink string `json:"finallink"`
+	SavePath  string `json:"savepath"`
+	MD5       string `json:"md5"`
+	FileType  string `json:"filetype"`
+	Length    int64  `json:"length"`
 }
 
 // 生产gout实例
-func NewGout() *gout.Gout {
+func NewClient() *http.Client {
 	client := &http.Client{
 		CheckRedirect: func(req *http.Request, via []*http.Request) error {
 			req.Header.Del("Referer")
@@ -30,15 +30,14 @@ func NewGout() *gout.Gout {
 			}
 			return nil
 		},
-		Timeout: time.Second * 10,
+		Timeout: time.Second * 60,
 	}
-	return gout.New(client)
+	return client
 }
 
 // 重定向获取最终链接
-func redirect(url string, g *gout.Gout) (string, error) {
-	resp, err := g.Head(url)
-	defer resp.Body.Close()
+func redirect(url string, client *http.Client) (string, error) {
+	resp, err := client.Head(url)
 	if err != nil {
 		return "", fmt.Errorf("请求链接失败: %w", err)
 	}
@@ -46,13 +45,18 @@ func redirect(url string, g *gout.Gout) (string, error) {
 }
 
 // 请求目标文件任务信息
-func GetFileInfo(url string, g *gout.Gout) (fileInfo FileInfo, err error) {
+func GetFileInfo(url string, client *http.Client) (fileInfo FileInfo, err error) {
+	defer client.CloseIdleConnections()
+	if url == "" {
+		return fileInfo, errors.New("空链接")
+	}
 	fileInfo.Renewal = false
-	finalLink, err := redirect(url, g)
+	finalLink, err := redirect(url, client)
 	if err != nil {
 		return
 	}
-	resp, err := g.Head(finalLink)
+	fileInfo.FinalLink = finalLink
+	resp, err := client.Head(finalLink)
 	defer resp.Body.Close()
 	if err != nil {
 		return fileInfo, fmt.Errorf("请求目标文件信息失败: %w", err)
@@ -69,8 +73,7 @@ func GetFileInfo(url string, g *gout.Gout) (fileInfo FileInfo, err error) {
 	// 获取文件MD5
 	fileInfo.MD5 = resp.Header.Get("Content-MD5")
 	// 获取文件名称
-	parse, _ := url2.Parse(url)
-	u := []byte(parse.Path)
+	u := []byte(finalLink)
 	s := strings.LastIndex(finalLink, "/")
 	if s == -1 {
 		s = 0
@@ -80,4 +83,12 @@ func GetFileInfo(url string, g *gout.Gout) (fileInfo FileInfo, err error) {
 		fileInfo.FileType = fileInfo.FileName[strings.LastIndex(fileInfo.FileName, ".")+1:]
 	}
 	return
+}
+
+func GetRequest(url string, start int64, end int64) *http.Request {
+	request, _ := http.NewRequest("GET", url, nil)
+	request.Header.Add("User-Agent", browser.Chrome())
+	request.Header.Add("Range", fmt.Sprintf("bytes=%d-%d", start, end))
+	request.Header.Add("Connection", "keep-alive")
+	return request
 }

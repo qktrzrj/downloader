@@ -4,12 +4,19 @@ import (
 	"bytes"
 	"database/sql"
 	"downloader/downloader"
+	"downloader/util"
+	"encoding/json"
 	"errors"
+	"fmt"
+	"github.com/gin-gonic/gin"
+	"github.com/gorilla/websocket"
 	_ "github.com/mattn/go-sqlite3"
+	"net/http"
 	"os"
 	"os/exec"
 	"os/user"
 	"runtime"
+	"strconv"
 	"strings"
 )
 
@@ -21,9 +28,15 @@ var (
 )
 
 var savePath = map[string]string{
-	"windows": `\Downloads\`,
-	"darwin":  `\Download\`,
-	"linux":   `\Download\`,
+	"windows": `/Downloads/`,
+	"darwin":  `/Download/`,
+	"linux":   `/Download/`,
+}
+
+var upGrader = websocket.Upgrader{
+	CheckOrigin: func(r *http.Request) bool {
+		return true
+	},
 }
 
 func homeUnix() (string, error) {
@@ -97,4 +110,73 @@ func main() {
 	}
 	downloader.Download.Init()
 	go downloader.Download.ListenEvent()
+
+	router := gin.Default()
+	router.GET("/getFileInfo", func(context *gin.Context) {
+		result := util.NewResult()
+		defer context.JSON(http.StatusOK, result)
+		fileInfo, err := util.GetFileInfo(context.Query("url"), util.NewClient())
+		if err != nil {
+			result.Code = -1
+			result.Msg = fmt.Sprint(err)
+			return
+		}
+		fileInfo.SavePath = downloader.Download.SavePath
+		result.Data = fileInfo
+	})
+
+	router.POST("/addTask", func(context *gin.Context) {
+		result := util.NewResult()
+		defer context.JSON(http.StatusOK, result)
+		var fileInfo util.FileInfo
+		err := context.BindJSON(&fileInfo)
+		if err != nil {
+			result.Code = -1
+			result.Msg = fmt.Sprint(err)
+			return
+		}
+		id, err := downloader.Download.AddTask(fileInfo, util.NewClient())
+		if err != nil {
+			result.Code = -1
+			result.Msg = fmt.Sprint(err)
+			return
+		}
+		result.Data = id
+	})
+
+	router.GET("/getTaskInfo", func(c *gin.Context) {
+		// change the reqest to websocket model
+		conn, err := (&websocket.Upgrader{CheckOrigin: func(r *http.Request) bool { return true }}).Upgrade(c.Writer, c.Request, nil)
+		if err != nil {
+			http.NotFound(c.Writer, c.Request)
+			return
+		}
+		for {
+			//读取ws中的数据
+			mt, message, err := conn.ReadMessage()
+			if err != nil {
+				break
+			}
+			i, err := strconv.Atoi(string(message))
+			if err != nil {
+				break
+			}
+			id := downloader.TaskId(i)
+			task, ok := downloader.Download.ActiveTaskMap[id]
+			if !ok {
+				break
+			}
+			marshal, err := json.Marshal(task)
+			if err != nil {
+				break
+			}
+			//写入ws数据
+			err = conn.WriteMessage(mt, marshal)
+			if err != nil {
+				break
+			}
+		}
+	})
+
+	_ = router.Run(":4800")
 }

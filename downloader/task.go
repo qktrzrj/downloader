@@ -4,9 +4,9 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
-	"github.com/guonaihong/gout"
 	"io"
 	"log"
+	"net/http"
 	"os"
 	"sync"
 	"time"
@@ -48,10 +48,10 @@ type TaskEvent struct {
 type Task struct {
 	id                int
 	renewal           bool // 是否支持断点续传
-	Status            int  //下载状态
+	Status            int  `json:"status"` //下载状态
 	fileLength        int64
-	downloadCount     int64   // 已下载片段数
-	remainingTime     float64 //剩余时间
+	DownloadCount     int64   `json:"downloadCount"` // 已下载片段数
+	RemainingTime     float64 `json:"remainingTime"` //剩余时间
 	Url               string
 	finalLink         string
 	file              *os.File
@@ -66,10 +66,10 @@ type Task struct {
 	btCancel          chan struct{}
 	btLock            sync.Mutex
 	speedCountChan    chan struct{}
-	speedCount        float64
+	SpeedCount        float64 `json:"speedCount"`
 	Event             *TaskEvent
 	BufferPool        *sync.Pool
-	client            *gout.Gout
+	client            *http.Client
 }
 
 func (task *Task) Id() TaskId {
@@ -79,7 +79,7 @@ func (task *Task) Id() TaskId {
 
 // 任务初始化
 func (task *Task) init() (err error) {
-	task.file, err = os.OpenFile(task.SavePath, os.O_CREATE|os.O_RDWR|os.O_SYNC, 0644)
+	task.file, err = os.OpenFile(task.SavePath+task.FileName, os.O_CREATE|os.O_RDWR|os.O_SYNC, 0644)
 	if err != nil {
 		return fmt.Errorf("打开本地文件错误:%w", err)
 	}
@@ -102,11 +102,11 @@ func (task *Task) init() (err error) {
 		start: 0,
 		end:   task.fileLength,
 	})
-	task.downloadCount = 0
+	task.DownloadCount = 0
 	if len(task.completed) > 0 {
 		for _, segment := range task.completed {
 			task.undistributed = task.removeSeg(task.undistributed, segment)
-			task.downloadCount += Download.SegSize
+			task.DownloadCount += Download.SegSize
 		}
 	}
 	return
@@ -123,6 +123,7 @@ func (task *Task) Start() error {
 			task.Status = Errored
 			return
 		}
+		go task.speedCalculate()
 		for i := 0; i < Download.MaxRoutineNum; i++ {
 			task.bts[i] = &bt{
 				id:   i,
@@ -165,14 +166,14 @@ func (task *Task) Exit() {
 func (task *Task) speedCalculate() {
 	t := time.Tick(time.Second)
 	for {
-		preDownCount := task.downloadCount
+		preDownCount := task.DownloadCount
 		select {
 		case <-task.speedCountChan:
-			task.speedCount = 0
+			task.SpeedCount = 0
 			return
 		case <-t:
-			task.speedCount = (float64(task.downloadCount) - float64(preDownCount)) / 1024
-			task.remainingTime = (float64(task.fileLength-task.downloadCount) / 1024) / task.speedCount
+			task.SpeedCount = (float64(task.DownloadCount) - float64(preDownCount)) / 1024
+			task.RemainingTime = (float64(task.fileLength-task.DownloadCount) / 1024) / task.SpeedCount
 		}
 	}
 }

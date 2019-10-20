@@ -1,6 +1,7 @@
 package downloader
 
 import (
+	"downloader/util"
 	"fmt"
 	"os"
 	"os/exec"
@@ -13,19 +14,22 @@ import (
 func TestBt__downSeg(t *testing.T) {
 	url := "https://www.typora.io/windows/typora-setup-x64.exe"
 	Download = Downloader{
-		MaxRoutineNum:    200,
-		SegSize:          100 * 1024,
+		MaxRoutineNum:    1,
+		SegSize:          1024 * 1024,
 		BufferSize:       0,
-		SavePath:         "F:/goProject/Downloader/",
+		SavePath:         "./",
 		MaxActiveTaskNum: 3,
 	}
 	Download.Init()
-	g := NewGout()
-	fileInfo, err := GetFileInfo(url, g)
+	go Download.ListenEvent()
+	g := util.NewClient()
+	fileInfo, err := util.GetFileInfo(url, g)
 	if err != nil {
 		panic(err)
 	}
-	_, _ = Download.AddTask(fileInfo, g)
+	fileInfo.SavePath = Download.SavePath
+	_, _ = Download.AddTask(fileInfo, util.NewClient())
+	select {}
 }
 
 func Test__filePath(t *testing.T) {

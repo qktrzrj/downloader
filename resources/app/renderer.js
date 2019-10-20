@@ -8,6 +8,21 @@ var close = document.getElementById('close');
 var add = document.getElementById('add')
 var input = document.getElementById('input')
 var download = document.getElementById('download')
+var ws = new WebSocket("ws://localhost:4800/getTaskInfo")
+
+//连接打开时触发 
+ws.onopen = function (evt) {
+    console.log("Connection open ...");
+};
+//接收到消息时触发  
+ws.onmessage = function (evt) {
+    console.log("Received Message: " + evt.data);
+};
+//连接关闭时触发  
+ws.onclose = function (evt) {
+    console.log("Connection closed.");
+};
+
 
 function additem(id, name, size) {
     var itemdiv = document.createElement('div')
@@ -40,7 +55,11 @@ function additem(id, name, size) {
     var downsize = document.createElement('span')
     downsize.className = 'downsize'
     downsize.id = id + 'downsize'
-    downsize.innerText = '0 MB of ' + size + ' MB'
+    if (size >= 1024 * 1024) {
+        downsize.innerText = '0 KB of ' + parseInt(size / (1024 * 1024)) + ' MB'
+    } else {
+        downsize.innerText = '0 KB of ' + parseInt(size / 1024) + ' KB'
+    }
     iteminfo.appendChild(downsize)
     var filestatus = document.createElement('span')
     filestatus.className = 'filestatus'
@@ -56,14 +75,14 @@ function additem(id, name, size) {
     countuner()
 }
 
-function countuner(){
-    var count=document.getElementsByClassName('filenum')
-    var c=1
-    for(var i=0;i<count.length;i++){
-        if(count[i].parentElement.parentElement.hidden){
+function countuner() {
+    var count = document.getElementsByClassName('filenum')
+    var c = 1
+    for (var i = 0; i < count.length; i++) {
+        if (count[i].parentElement.parentElement.hidden) {
             continue
         }
-        count[i].innerText='['+c+']'
+        count[i].innerText = '[' + c + ']'
         c++
     }
 }
@@ -133,6 +152,62 @@ if (zoom) {
 
 if (add) {
     add.addEventListener('click', () => {
-        additem(1, 'add', 120)
+        if (input.value == '') {
+            remote.dialog.showErrorBox('错误', '无效的url')
+            return
+        }
+        fetch('http://localhost:4800/getFileInfo?url=' + input.value).then(function (res) {
+            input.value = ''
+            if (res.status != 200) {
+                remote.dialog.showErrorBox('错误', '服务异常')
+                return
+            }
+            res.json().then((data) => {
+                if (data != "" && data.code == 1) {
+                    var filename = data.data.filename
+                    var length = data.data.length
+                    var savepath = data.data.savepath
+                    const options = {
+                        title: '保存文件',
+                        defaultPath: savepath + filename,
+                        filters: [
+                            { name: 'All Files', extensions: ['*'] }
+                        ]
+                    }
+                    var path = remote.dialog.showSaveDialogSync(options)
+                    if (path == undefined) {
+                        return
+                    }
+                    data.data.savepath = path.slice(0, path.lastIndexOf('/') + 1)
+                    data.data.filename = path.slice(path.lastIndexOf("/") + 1, path.length)
+                    fetch('http://localhost:4800/addTask', {
+                        method: 'POST',
+                        body: JSON.stringify(data.data),
+                        headers: new Headers({
+                            'Content-Type': 'application/json'
+                        })
+                    }).then(function (res) {
+                        if (res.status != 200) {
+                            remote.dialog.showErrorBox('错误', '服务异常')
+                            return
+                        }
+                        res.json().then((data) => {
+                            if (data != "" && data.code == 1) {
+                                additem(data.data.id, filename, length)
+                                ws.send(data.data.id)
+                                return
+                            }
+                            remote.dialog.showErrorBox('错误', data.msg)
+                        })
+                    }).catch(function (error) {
+                        remote.dialog.showErrorBox('错误', '请求失败:' + error.message)
+                    })
+                    return
+                }
+                remote.dialog.showErrorBox('错误', data.msg)
+            })
+        }).catch(function (error) {
+            remote.dialog.showErrorBox('错误', '请求失败:' + error.message)
+        })
     })
 }
