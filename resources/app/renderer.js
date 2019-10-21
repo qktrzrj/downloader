@@ -144,7 +144,10 @@ function addListener(id) {
             operate(id, 1)
             return
         }
-        operate(id, 2)
+        if (state !== 'Success') {
+            operate(id, 2)
+        }
+        operate(id, 5)
     })
 
     item.addEventListener('mouseover', () => {
