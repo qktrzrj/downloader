@@ -3,7 +3,7 @@ package downloader
 import (
 	"downloader/util"
 	"fmt"
-	"math/rand"
+	uuid "github.com/satori/go.uuid"
 	"net/http"
 	"os"
 	"os/exec"
@@ -11,8 +11,6 @@ import (
 	"sync"
 	"sync/atomic"
 )
-
-type TaskId int
 
 // 事件列表
 const (
@@ -42,22 +40,22 @@ type Downloader struct {
 	SavePath         string
 	activeTaskNum    int32
 	MaxActiveTaskNum int32
-	ActiveTaskMap    map[TaskId]*Task //未完成的任务
-	CompleteTaskMap  map[TaskId]*Task //已完成的任务
+	ActiveTaskMap    map[string]*Task //未完成的任务
+	CompleteTaskMap  map[string]*Task //已完成的任务
 	mapLock          sync.Mutex
 	TaskQueue        *ItemQueue
 }
 
 // 下载器事件
 type DownloadEvent struct {
-	TaskId TaskId
+	TaskId string
 	Enum   int
 }
 
 // 初始化
 func (d *Downloader) Init() {
 	d.Event = make(chan DownloadEvent, 1)
-	d.ActiveTaskMap, d.CompleteTaskMap = make(map[TaskId]*Task), make(map[TaskId]*Task)
+	d.ActiveTaskMap, d.CompleteTaskMap = make(map[string]*Task), make(map[string]*Task)
 	d.mapLock = sync.Mutex{}
 	taskQueue := &ItemQueue{
 		lock: sync.RWMutex{},
@@ -66,7 +64,7 @@ func (d *Downloader) Init() {
 }
 
 // 添加任务
-func (d *Downloader) AddTask(fileInfo util.FileInfo, client *http.Client) (TaskId, error) {
+func (d *Downloader) AddTask(fileInfo util.FileInfo, client *http.Client) (string, error) {
 	Download.mapLock.Lock()
 	defer Download.mapLock.Unlock()
 	if d.FileExist(fileInfo.SavePath + fileInfo.FileName) {
@@ -75,35 +73,36 @@ func (d *Downloader) AddTask(fileInfo util.FileInfo, client *http.Client) (TaskI
 	// 创建文件
 	file, err := os.OpenFile(fileInfo.SavePath+fileInfo.FileName, os.O_CREATE, 0644)
 	if err != nil {
-		return 0, err
+		return "", err
 	}
 	_ = file.Close()
 	// 创建任务
 	task := &Task{
-		id:         rand.Int(),
+		Id:         uuid.NewV4().String(),
 		renewal:    fileInfo.Renewal,
 		Status:     Waiting,
-		fileLength: fileInfo.Length,
+		FileLength: fileInfo.Length,
 		finalLink:  fileInfo.FinalLink,
 		FileName:   fileInfo.FileName,
 		SavePath:   fileInfo.SavePath,
 		client:     client,
+		Conn:       nil,
 	}
 	// 添加任务
-	Download.ActiveTaskMap[task.Id()] = task
+	Download.ActiveTaskMap[task.Id] = task
 	// 将任务放入等待队列
-	Download.TaskQueue.Enqueue(task.Id())
+	Download.TaskQueue.Enqueue(task.Id)
 	Download.Event <- DownloadEvent{
-		TaskId: task.Id(),
+		TaskId: task.Id,
 		Enum:   Schedule,
 	}
 	// 维护任务列表
 	atomic.AddInt32(&Download.activeTaskNum, 1)
-	return task.Id(), nil
+	return task.Id, nil
 }
 
 // 暂停任务
-func (d *Downloader) pauseTask(id TaskId) {
+func (d *Downloader) pauseTask(id string) {
 	task, ok := Download.ActiveTaskMap[id]
 	if !ok {
 	}
@@ -112,19 +111,19 @@ func (d *Downloader) pauseTask(id TaskId) {
 }
 
 // 继续任务
-func (d *Downloader) resumeTask(id TaskId) {
+func (d *Downloader) resumeTask(id string) {
 	task, ok := Download.ActiveTaskMap[id]
 	if !ok {
 	}
-	Download.TaskQueue.Enqueue(task.Id())
+	Download.TaskQueue.Enqueue(task.Id)
 	Download.Event <- DownloadEvent{
-		TaskId: task.Id(),
+		TaskId: task.Id,
 		Enum:   Schedule,
 	}
 }
 
 // 取消任务
-func (d *Downloader) cancelTask(id TaskId) {
+func (d *Downloader) cancelTask(id string) {
 	Download.mapLock.Lock()
 	defer Download.mapLock.Unlock()
 	task, ok := Download.ActiveTaskMap[id]
@@ -137,7 +136,7 @@ func (d *Downloader) cancelTask(id TaskId) {
 }
 
 // 任务完成
-func (d *Downloader) successTask(id TaskId) {
+func (d *Downloader) successTask(id string) {
 	Download.mapLock.Lock()
 	defer Download.mapLock.Unlock()
 	task, _ := Download.ActiveTaskMap[id]
@@ -150,7 +149,7 @@ func (d *Downloader) successTask(id TaskId) {
 }
 
 // 打开文件
-func (d *Downloader) openTask(id TaskId) {
+func (d *Downloader) openTask(id string) {
 	task, ok := Download.CompleteTaskMap[id]
 	if !ok {
 		return
@@ -167,11 +166,11 @@ func (d *Downloader) openTask(id TaskId) {
 }
 
 // 删除已完成任务
-func (d *Downloader) removeTask(id TaskId) {
+func (d *Downloader) removeTask(id string) {
 	task, ok := Download.CompleteTaskMap[id]
 	if !ok {
 	}
-	delete(Download.CompleteTaskMap, task.Id())
+	delete(Download.CompleteTaskMap, task.Id)
 }
 
 // if not exist return false else return true
@@ -189,7 +188,7 @@ func (d *Downloader) FileExist(path string) bool {
 // 任务调度
 func (d *Downloader) Schedule() {
 	if d.activeTaskNum <= d.MaxActiveTaskNum && !d.TaskQueue.IsEmpty() {
-		id := (*d.TaskQueue.Dequeue()).(TaskId)
+		id := (*d.TaskQueue.Dequeue()).(string)
 		task, ok := d.ActiveTaskMap[id]
 		if !ok {
 			return

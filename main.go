@@ -5,7 +5,6 @@ import (
 	"database/sql"
 	"downloader/downloader"
 	"downloader/util"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"github.com/gin-gonic/gin"
@@ -19,7 +18,6 @@ import (
 	"os/signal"
 	"os/user"
 	"runtime"
-	"strconv"
 	"strings"
 	"time"
 )
@@ -29,18 +27,12 @@ var (
 	allPath    string
 	routineNum int
 	maxTaskNum int32
+	Conn       *websocket.Conn
 )
 
 var savePath = map[string]string{
-	"windows": `/Downloads/`,
+	"windows": `\Downloads\`,
 	"darwin":  `/Download/`,
-	"linux":   `/Download/`,
-}
-
-var upGrader = websocket.Upgrader{
-	CheckOrigin: func(r *http.Request) bool {
-		return true
-	},
 }
 
 func homeUnix() (string, error) {
@@ -155,31 +147,27 @@ func main() {
 			http.NotFound(c.Writer, c.Request)
 			return
 		}
-		for {
-			//读取ws中的数据
-			mt, message, err := conn.ReadMessage()
-			if err != nil {
-				break
-			}
-			i, err := strconv.Atoi(string(message))
-			if err != nil {
-				break
-			}
-			id := downloader.TaskId(i)
-			task, ok := downloader.Download.ActiveTaskMap[id]
-			if !ok {
-				break
-			}
-			marshal, err := json.Marshal(task)
-			if err != nil {
-				break
-			}
-			//写入ws数据
-			err = conn.WriteMessage(mt, marshal)
-			if err != nil {
-				break
-			}
+		task, ok := downloader.Download.ActiveTaskMap[c.Query("id")]
+		if !ok {
+			_ = conn.Close()
+			return
 		}
+		task.Conn = conn
+	})
+
+	router.GET("/checkActive", func(c *gin.Context) {
+		// change the reqest to websocket model
+		conn, err := (&websocket.Upgrader{CheckOrigin: func(r *http.Request) bool { return true }}).Upgrade(c.Writer, c.Request, nil)
+		if err != nil {
+			http.NotFound(c.Writer, c.Request)
+			return
+		}
+		Conn = conn
+		Conn.SetCloseHandler(func(code int, text string) error {
+			log.Fatal("主动断开链接")
+			return nil
+		})
+		_, _, _ = Conn.ReadMessage()
 	})
 
 	server := &http.Server{
@@ -188,6 +176,12 @@ func main() {
 		ReadTimeout:  60 * time.Second,
 		WriteTimeout: 60 * time.Second,
 	}
+
+	go func() {
+		cmd := exec.Command("cmd", "/C", "electron ./resources/app/")
+		cmd.Start()
+	}()
+
 	go func() {
 		if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 			log.Fatalf("listen: %s\n", err)

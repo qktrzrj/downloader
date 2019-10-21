@@ -2,36 +2,49 @@
 <html>
 
 <head>
-	<meta charset="UTF-8">
-	<link rel="stylesheet" href="./top.css">
-	<link rel="stylesheet" href="./main.css">
-	<link rel="stylesheet" href="./item.css">
-	<style>
-		::-webkit-scrollbar {
-			display: none;
-		}
-	</style>
+    <meta charset="UTF-8">
+    <link rel="stylesheet" href="./top.css">
+    <link rel="stylesheet" href="./main.css">
+    <link rel="stylesheet" href="./item.css">
+    <style>
+        ::-webkit-scrollbar {
+            display: none;
+        }
+    </style>
 </head>
 
 <body style="overflow:hidden">
-	<div class="topbar">
-		<img class="max-min-close" src="./icon/close.png" id="close" alt="">
-		<img class="max-min-close" src="./icon/minimize.png" id="minimize" alt="">
-		<img class="max-min-close" src="./icon/zoom.png" id="zoom" alt="">
-		<div class="add-search">
-			<img class="add-icon" src="./icon/add2.png" id="add">
-			<input id="input" class="search">
-		</div>
-	</div>
-	<div id="app" class="app">
-		<div id="download" class="download">
-		</div>
-		<div style="float:left;margin-left: 75%;width: 1px;height: 100%;background: darkgray;"></div>
-	</div>
-	<script>
-		// You can also require other files to run in this process
-		require('./renderer.js')
-	</script>
+<div class="topbar">
+    <img class="max-min-close" src="./icon/close.png" id="close" alt="">
+    <img class="max-min-close" src="./icon/minimize.png" id="minimize" alt="">
+    <img class="max-min-close" src="./icon/zoom.png" id="zoom" alt="">
+    <div class="add-search">
+        <img class="add-icon" src="./icon/add2.png" id="add" alt="">
+        <label for="input"></label><input id="input" class="search">
+    </div>
+</div>
+<div id="app" class="app">
+    <div id="download" class="download">
+        <div class="item" id="1i">
+			<img class="item-op" src="icon/c_pau.png" id="1item-op" alt="">
+			<div style="float:left;margin-left: auto;width: 1px;height: 100%;background: darkgray;"></div>
+            <div class="item-info">
+                <div><span class="filename">fds</span></div>
+                <div><span class="filenum">1</span>
+                <span class="downsize">1MB</span></div>
+            </div>
+			<span class="filestatus" >111</span>
+			<progress class="progress"></progress>
+			<div class="item-ex" id="ex"></div>
+        </div>
+		<img class="item-delete" id="de" src="" alt="">
+    </div>
+    <div style="float:left;margin-left: 75%;width: 1px;height: 100%;background: darkgray;"></div>
+</div>
+<script>
+    // You can also require other files to run in this process
+    require('./renderer.js')
+</script>
 </body>
 
 </html>

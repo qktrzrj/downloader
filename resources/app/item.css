@@ -1,5 +1,5 @@
 
-.download{
+.download {
     position: absolute;
     top: 10px;
     bottom: 10px;
@@ -11,78 +11,100 @@
     counter-reset: number;
 }
 
-.item{
-    background-color: white;width: 90%;height: 50px;margin-left: 5%;margin-top: 20px;
+.item {
+    background-color: white;
+    width: 90%;
+    height: 50px;
+    margin-left: 5%;
+    margin-top: 20px;
 }
 
-.item:before{
-    counter-increment: number;
+.item-ex {
+    width: 100%;
+    height: 50px;
+    margin-left: 0%;
 }
 
-.item-op{
+.item-ex:hover {
+    margin-left: 20%;
+}
+
+.item-op {
     float: left;
     margin: 20px;
+    -webkit-user-select: none;
+    user-select: none
 }
 
-.item-info{
+.item-info {
     float: left;
+    height: 50px;
+    width: 50%;
+    margin-left: 10px;
+    margin-top: 5px;
 }
 
-.filename{
-    margin: 5px;
+.filename {
+    margin: 10px;
     font-size: 18px;
     /* 字体颜色 */
     color: #000000;
-    -webkit-user-select:none;
-    user-select:none
+    -webkit-user-select: none;
+    user-select: none
 }
 
-.filenum{
-    margin-left: 5px;
-    font-size: 12px;
-    /* 字体颜色 */
-    color: #000000;
-    -webkit-user-select:none;
-    user-select:none
-}
-
-.downsize{
+.filenum {
     margin-left: 10px;
     font-size: 12px;
     /* 字体颜色 */
-    color: #ccc9c996;
-    -webkit-user-select:none;
-    user-select:none
+    color: #000000;
+    -webkit-user-select: none;
+    user-select: none
 }
 
-.filestatus{
-    margin-left: 78%;
-    margin-top: -30px;
-    font-size: 15px;
-    float: left;
+.downsize {
+    margin-left: 10px;
+    font-size: 12px;
     /* 字体颜色 */
-    color: #ccc9c996;
-    -webkit-user-select:none;
-    user-select:none
+    color: rgba(203, 197, 203, 0.77);
+    -webkit-user-select: none;
+    user-select: none
 }
 
-.progress{
+.filestatus {
+    margin: 15px;
+    font-size: 15px;
+    float: right;
+    /* 字体颜色 */
+    color: rgba(203, 197, 203, 0.77);
+    -webkit-user-select: none;
+    user-select: none
+}
+
+.item-delete {
+    float: right;
+    margin-top: -35px;
+    margin-right: 1%;
+    display: none;
+    -webkit-user-select: none;
+    user-select: none
+}
+
+.progress {
     /* background: snow;
     border:2px solid #437af1; */
-    width:100%;
-    height:2px;
+    width: 100%;
+    height: 2px;
     float: left;
-    margin-top:-5px;
+    margin-top: -5px;
     -webkit-appearance: none;
 }
-progress::-webkit-progress-bar
 
-{
-    background-color:#ffffff;
+progress::-webkit-progress-bar {
+    background-color: #ffffff;
 
 }
-progress::-webkit-progress-value
 
-{
-    background-color:rgba(14, 101, 231, 0.932);
+progress::-webkit-progress-value {
+    background-color: rgba(14, 101, 231, 0.932);
 }

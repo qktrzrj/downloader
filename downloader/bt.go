@@ -7,6 +7,7 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"strings"
 	"sync/atomic"
 	"time"
 )
@@ -27,9 +28,9 @@ func (bt *bt) start() {
 	errNum := 0
 	for {
 		if errNum >= 3 && bt.task.Status == Downloading {
-			log.Println(fmt.Sprintf("task %d, worker %d error", bt.task.id, bt.id))
+			log.Println(fmt.Sprintf("task %d, worker %d error", bt.task.Id, bt.id))
 			bt.task.Status = Errored
-			go bt.task.Exit()
+			close(bt.task.btCancel)
 			break
 		}
 		select {
@@ -45,8 +46,8 @@ func (bt *bt) start() {
 				if segment.finish != segment.start {
 					segment.start = segment.finish + 1
 				}
-				log.Println(fmt.Sprintf("task %d, worker %d segment start %d end %d error",
-					bt.task.id, bt.id, segment.start, segment.end))
+				log.Println(fmt.Sprintf("task %d, worker %d segment start %d end %d error %v",
+					bt.task.Id, bt.id, segment.start, segment.end, err))
 				errNum++
 				bt.task.segErr(segment)
 				continue
@@ -82,6 +83,9 @@ func (bt *bt) downSeg(segment *SegMent, timer *time.Timer) (err error) {
 			ch := make(chan struct{})
 			go func() {
 				l, err = reader.Read(bin)
+				if err != nil && strings.Contains(err.Error(), "EOF") {
+					err = nil
+				}
 				close(ch)
 			}()
 			return ch
@@ -109,8 +113,8 @@ func (bt *bt) downSeg(segment *SegMent, timer *time.Timer) (err error) {
 				err = writeErr
 				break
 			}
-			buf.Reset()                             // 重置缓冲区
-			segment.finish = segment.start + bufLen // 片段写入磁盘偏移量
+			buf.Reset()                                 // 重置缓冲区
+			segment.finish = segment.start + bufLen - 1 // 片段写入磁盘偏移量
 		}
 		if err == io.EOF {
 			err = nil

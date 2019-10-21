@@ -3,8 +3,10 @@ package downloader
 import (
 	"bytes"
 	"downloader/util"
+	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/gorilla/websocket"
 	"io"
 	"log"
 	"net/http"
@@ -22,22 +24,6 @@ const (
 	Errored
 )
 
-var TaskStatusMap map[int]string = map[int]string{
-	Waiting:     "等待",
-	Downloading: "下载中",
-	Over:        "下载完成",
-	Paused:      "暂停",
-	Errored:     "下载出错",
-}
-
-// what can do when task stay slow status
-var DpStatusMap map[int]string = map[int]string{
-	Waiting:     "暂停",
-	Downloading: "暂停",
-	Paused:      "继续",
-	Errored:     "重新下载",
-}
-
 // 任务事件
 type TaskEvent struct {
 	Resume chan struct{}
@@ -47,17 +33,17 @@ type TaskEvent struct {
 }
 
 type Task struct {
-	id                int
-	renewal           bool // 是否支持断点续传
-	Status            int  `json:"status"` //下载状态
-	fileLength        int64
+	Id                string  `json:"id"`
+	renewal           bool    // 是否支持断点续传
+	Status            int     `json:"status"` //下载状态
+	FileLength        int64   `json:"filelength"`
 	DownloadCount     int64   `json:"downloadCount"` // 已下载片段数
 	RemainingTime     float64 `json:"remainingTime"` //剩余时间
-	Url               string
+	Url               string  `json:"-"`
 	finalLink         string
 	file              *os.File
-	FileName          string
-	SavePath          string
+	FileName          string     `json:"-"`
+	SavePath          string     `json:"-"`
 	undistributed     []*SegMent // 尚未分配的片段
 	undistributedLock sync.Mutex
 	completed         []*SegMent
@@ -67,15 +53,11 @@ type Task struct {
 	btCancel          chan struct{}
 	btLock            sync.Mutex
 	speedCountChan    chan struct{}
-	SpeedCount        float64 `json:"speedCount"`
-	Event             *TaskEvent
-	BufferPool        *sync.Pool
+	SpeedCount        float64    `json:"speedCount"`
+	Event             *TaskEvent `json:"-"`
+	BufferPool        *sync.Pool `json:"-"`
 	client            *http.Client
-}
-
-func (task *Task) Id() TaskId {
-	id := TaskId(task.id)
-	return id
+	Conn              *websocket.Conn `json:"-"`
 }
 
 // 任务初始化
@@ -101,7 +83,7 @@ func (task *Task) init() (err error) {
 	task.bts = make(map[int]*bt)
 	task.undistributed = append([]*SegMent{}, &SegMent{
 		start: 0,
-		end:   task.fileLength,
+		end:   task.FileLength,
 	})
 	task.DownloadCount = 0
 	if len(task.completed) > 0 {
@@ -136,18 +118,24 @@ func (task *Task) Start() error {
 				task.btLock.Lock()
 				delete(task.bts, bt.id)
 				task.btLock.Unlock()
-				log.Println(fmt.Sprintf("task %d, worker %d exit", task.id, bt.id))
+				log.Println(fmt.Sprintf("task %d, worker %d exit", task.Id, bt.id))
 				if len(task.bts) == 0 {
 					if task.Status == Paused {
-						log.Println(fmt.Sprintf("任务:%d 暂停成功！", task.Id()))
+						log.Println(fmt.Sprintf("任务:%d 暂停成功！", task.Id))
+					}
+					if task.Status == Errored {
+						log.Println(fmt.Sprintf("任务:%d 下载失败！", task.Id))
 					}
 					if task.Status == Downloading {
 						task.Status = Over
+						fmt.Println("下载完成")
 						Download.Event <- DownloadEvent{
-							TaskId: task.Id(),
+							TaskId: task.Id,
 							Enum:   Success,
 						}
 					}
+					time.Sleep(time.Second)
+					go task.Exit()
 				}
 			}(task.bts[i])
 		}
@@ -161,6 +149,9 @@ func (task *Task) Exit() {
 		close(task.btCancel)
 	}
 	close(task.speedCountChan)
+	if task.Conn != nil {
+		_ = task.Conn.Close()
+	}
 	_ = task.file.Close()
 }
 
@@ -175,7 +166,11 @@ func (task *Task) speedCalculate() {
 			return
 		case <-t:
 			task.SpeedCount = (float64(task.DownloadCount) - float64(preDownCount)) / 1024
-			task.RemainingTime = (float64(task.fileLength-task.DownloadCount) / 1024) / task.SpeedCount
+			task.RemainingTime = (float64(task.FileLength-task.DownloadCount) / 1024) / task.SpeedCount
+			if task.Conn != nil {
+				marshal, _ := json.Marshal(task)
+				_ = task.Conn.WriteMessage(websocket.TextMessage, marshal)
+			}
 		}
 	}
 }
@@ -218,7 +213,7 @@ func (task *Task) segErr(segment *SegMent) {
 
 // 写入文件
 func (task *Task) writeToDisk(segment *SegMent, buffer *bytes.Buffer) error {
-	_, err := task.file.Seek(segment.start, io.SeekStart)
+	_, err := task.file.Seek(segment.finish, io.SeekStart)
 	if err != nil {
 		return err
 	}
