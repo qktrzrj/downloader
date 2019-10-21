@@ -48,8 +48,8 @@ type Downloader struct {
 
 // 下载器事件
 type DownloadEvent struct {
-	TaskId string
-	Enum   int
+	TaskId string `json:"taskid"`
+	Enum   int    `json:"enum"`
 }
 
 // 初始化

@@ -137,9 +137,14 @@ function addListener(id) {
     let op = document.getElementById(id + 'item-op')
     let item = document.getElementById(id + 'item-ex')
     let del = document.getElementById(id + 'item-delete')
+    let state = document.getElementById(id + 'filestatus')
 
     op.addEventListener('click', () => {
-
+        if (state === 'Downloading' || state === 'Waiting') {
+            operate(id, 1)
+            return
+        }
+        operate(id, 2)
     })
 
     item.addEventListener('mouseover', () => {
@@ -160,7 +165,11 @@ function addListener(id) {
 
     del.addEventListener('click', () => {
         if (del.src !== '') {
-
+            if (state !== 'Success') {
+                operate(id, 3)
+                return
+            }
+            operate(id, 4)
         }
     })
 }
@@ -306,6 +315,32 @@ function addfunc() {
                 return
             }
             remote.dialog.showErrorBox('错误', data.msg)
+        })
+    }).catch(function (error) {
+        remote.dialog.showErrorBox('错误', '请求失败:' + error.message)
+    })
+}
+
+function operate(id, event) {
+    let data = {
+        taskid: id,
+        enum: event,
+    }
+    fetch('http://localhost:4800/oprate', {
+        method: 'POST',
+        body: JSON.stringify(data),
+        headers: new Headers({
+            'Content-Type': 'application/json'
+        })
+    }).then(function (res) {
+        if (res.status !== 200) {
+            remote.dialog.showErrorBox('错误', '服务异常')
+            return
+        }
+        res.json().then((data) => {
+            if (data === "" || data.code !== 1) {
+                remote.dialog.showErrorBox('错误', data.msg)
+            }
         })
     }).catch(function (error) {
         remote.dialog.showErrorBox('错误', '请求失败:' + error.message)

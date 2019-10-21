@@ -140,9 +140,23 @@ func main() {
 		result.Data = id
 	})
 
+	router.POST("/operate", func(context *gin.Context) {
+		result := util.NewResult()
+		defer context.JSON(http.StatusOK, result)
+		var event downloader.DownloadEvent
+		err := context.BindJSON(&event)
+		if err != nil {
+			result.Code = -1
+			result.Msg = fmt.Sprint(err)
+			return
+		}
+		downloader.Download.Event <- event
+	})
+
 	router.GET("/getTaskInfo", func(c *gin.Context) {
 		// change the reqest to websocket model
-		conn, err := (&websocket.Upgrader{CheckOrigin: func(r *http.Request) bool { return true }}).Upgrade(c.Writer, c.Request, nil)
+		conn, err := (&websocket.Upgrader{CheckOrigin: func(r *http.Request) bool { return true }}).Upgrade(
+			c.Writer, c.Request, nil)
 		if err != nil {
 			http.NotFound(c.Writer, c.Request)
 			return
@@ -157,7 +171,8 @@ func main() {
 
 	router.GET("/checkActive", func(c *gin.Context) {
 		// change the reqest to websocket model
-		conn, err := (&websocket.Upgrader{CheckOrigin: func(r *http.Request) bool { return true }}).Upgrade(c.Writer, c.Request, nil)
+		conn, err := (&websocket.Upgrader{CheckOrigin: func(r *http.Request) bool { return true }}).Upgrade(
+			c.Writer, c.Request, nil)
 		if err != nil {
 			http.NotFound(c.Writer, c.Request)
 			return
