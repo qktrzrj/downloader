@@ -54,10 +54,10 @@ function connect(id) {
     }
     //连接关闭时触发
     socket[id].onclose = function (evt) {
-        if (state.innerText === 'Errored') {
+        if (state.innerText === 'Errored' || state.innerText === 'Success') {
             return
         }
-        if (state.innerText === 'Downloading' || state.innerText === 'Waiting' || state.innerText === 'Success') {
+        if (state.innerText === 'Downloading' || state.innerText === 'Waiting') {
             state.innerText = 'Errored'
             return
         }

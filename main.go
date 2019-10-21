@@ -193,7 +193,7 @@ func main() {
 	}
 
 	go func() {
-		cmd := exec.Command("cmd", "/C", "electron ./resources/app/")
+		cmd := exec.Command("cmd", "electron ./resources/app/")
 		cmd.Start()
 	}()
 
