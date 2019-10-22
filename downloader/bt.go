@@ -95,26 +95,30 @@ func (bt *bt) downSeg(segment *SegMent, timer *time.Timer) (err error) {
 			if bufLen > 0 {
 				err = bt.task.writeToDisk(segment, buf)
 				if err == nil {
-					segment.finish = segment.start + bufLen
+					segment.finish = segment.start + bufLen - 1
 				}
 			}
-			err = errors.New("canceled")
-			break
+			return
 		}
 		if l <= 0 {
+			if buf.Len() > 0 {
+				writeErr := bt.task.writeToDisk(segment, buf)
+				buf.Reset() // 重置缓冲区
+				if writeErr != nil {
+					err = writeErr
+				}
+			}
 			break
 		}
 		buf.Write(bin[:l])
 		atomic.AddInt64(&bt.task.DownloadCount, int64(l))
 		if buf.Len() == buf.Cap() || err == io.EOF { // 缓存满了, 或者流尾, 写入磁盘
-			bufLen := int64(buf.Len())
 			writeErr := bt.task.writeToDisk(segment, buf)
+			buf.Reset() // 重置缓冲区
 			if writeErr != nil {
 				err = writeErr
 				break
 			}
-			buf.Reset()                                 // 重置缓冲区
-			segment.finish = segment.start + bufLen - 1 // 片段写入磁盘偏移量
 		}
 		if err == io.EOF {
 			err = nil

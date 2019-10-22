@@ -32,6 +32,8 @@
 .item-op {
     float: left;
     margin: 20px;
+    height: 15px;
+    width: 15px;
     -webkit-user-select: none;
     user-select: none
 }

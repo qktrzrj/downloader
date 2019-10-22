@@ -1,5 +1,6 @@
 let ipcRenderer = require('electron').ipcRenderer
 const {remote} = require('electron')
+const app = remote.app
 
 
 let zoom = document.getElementById('zoom')
@@ -8,7 +9,8 @@ let close = document.getElementById('close')
 let add = document.getElementById('add')
 let input = document.getElementById('input')
 let download = document.getElementById('download')
-let socket = []
+let socket = new Map()
+let savePath = new Map()
 let taskStatusMap = new Map([
     [1, 'Waiting'],
     [2, 'Downloading'],
@@ -34,6 +36,7 @@ function connect(id) {
     let bar = document.getElementById(id + 'progress')
     let state = document.getElementById(id + 'filestatus')
     let size = document.getElementById(id + 'downsize')
+    let op = document.getElementById(id + 'item-op')
     //连接打开时触发
     socket[id].onopen = function (evt) {
         console.log("Connection open ...")
@@ -41,7 +44,17 @@ function connect(id) {
     //接收到消息时触发
     socket[id].onmessage = function (evt) {
         console.log("Received Message: " + evt.data)
-        let data = JSON.parse(evt.data)
+        let err = false
+        let data
+        try {
+            data = JSON.parse(evt.data)
+        } catch (e) {
+            console.log("json parse err:" + e)
+            err = true
+        }
+        if (err === true) {
+            return
+        }
         let downsize = 0
         if (data.downloadCount >= 1024 * 1024) {
             downsize = parseInt(data.downloadCount / (1024 * 1024)) + ' MB '
@@ -51,14 +64,25 @@ function connect(id) {
         bar.value = parseInt(data.downloadCount * 100 / data.filelength)
         state.innerText = taskStatusMap.get(data.status)
         size.innerText = downsize + size.innerText.slice(size.innerText.indexOf('Of'), size.innerText.length)
+        if (data.status === 3) {
+            getFileIcon(id, op)
+        }
+        if (data.status === 1 || data.status === 2) {
+            op.src = './icon/c_pau.png'
+        }
+        if (data.status === 4 || data.status === 5) {
+            op.src = './icon/play1.png'
+        }
     }
     //连接关闭时触发
     socket[id].onclose = function (evt) {
+        delete socket[id]
         if (state.innerText === 'Errored' || state.innerText === 'Success') {
             return
         }
         if (state.innerText === 'Downloading' || state.innerText === 'Waiting') {
             state.innerText = 'Errored'
+            op.src = './icon/play1.png'
             return
         }
         remote.dialog.showErrorBox('错误', '服务异常')
@@ -256,10 +280,10 @@ if (add) {
     add.addEventListener('click', () => {
         addfunc()
     })
-    input.addEventListener('submit', () => {
-        //if (e.keyCode === 13) {
-        addfunc()
-        //}
+    input.addEventListener('keypress', (e) => {
+        if (e.keyCode === 13) {
+            addfunc()
+        }
     })
 }
 
@@ -305,6 +329,7 @@ function addfunc() {
                     }
                     res.json().then((data) => {
                         if (data !== "" && data.code === 1) {
+                            savePath[data.data] = path
                             additem(data.data, filename, length)
                             addListener(data.data)
                             connect(data.data)
@@ -329,7 +354,7 @@ function operate(id, event) {
         taskid: id,
         enum: event,
     }
-    fetch('http://localhost:4800/oprate', {
+    fetch('http://localhost:4800/operate', {
         method: 'POST',
         body: JSON.stringify(data),
         headers: new Headers({
@@ -347,6 +372,32 @@ function operate(id, event) {
         })
     }).catch(function (error) {
         remote.dialog.showErrorBox('错误', '请求失败:' + error.message)
+    })
+}
+
+function getFileIcon(id, op) {
+    app.getFileIcon(savePath[id], {size: "normal"}).then(function (icon) {
+        let buffer = icon.toPNG();
+        let fs = require('fs');
+        let tmpFile = './tmp/' + id + '.png';
+        fs.open(tmpFile, 'w+', function (error, fd) {
+            if (error) {
+                console.log(error);
+                return false;
+            }
+            fd.write(buffer)
+            op.src = tmpFile
+            console.log('写入成功');
+        })
+        // let writerStream = fs.createWriteStream(tmpFile);
+        // writerStream.write(buffer);
+        // writerStream.end();  //标记文件末尾  结束写入流，释放资源
+        // writerStream.on('finish', function () {
+        //     console.log("写入完成。");
+        // });
+        // writerStream.on('error', function (error) {
+        //     console.log(error.stack);
+        // });
     })
 }
 

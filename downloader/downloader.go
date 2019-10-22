@@ -114,6 +114,7 @@ func (d *Downloader) pauseTask(id string) {
 func (d *Downloader) resumeTask(id string) {
 	task, ok := Download.ActiveTaskMap[id]
 	if !ok {
+		return
 	}
 	Download.TaskQueue.Enqueue(task.Id)
 	Download.Event <- DownloadEvent{

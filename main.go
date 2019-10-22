@@ -108,10 +108,10 @@ func main() {
 	go downloader.Download.ListenEvent()
 
 	router := gin.Default()
-	router.GET("/getFileInfo", func(context *gin.Context) {
+	router.GET("/getFileInfo", func(c *gin.Context) {
 		result := util.NewResult()
-		defer context.JSON(http.StatusOK, result)
-		fileInfo, err := util.GetFileInfo(context.Query("url"), util.NewClient())
+		defer c.JSON(http.StatusOK, result)
+		fileInfo, err := util.GetFileInfo(c.Query("url"), util.NewClient())
 		if err != nil {
 			result.Code = -1
 			result.Msg = fmt.Sprint(err)
@@ -121,11 +121,11 @@ func main() {
 		result.Data = fileInfo
 	})
 
-	router.POST("/addTask", func(context *gin.Context) {
+	router.POST("/addTask", func(c *gin.Context) {
 		result := util.NewResult()
-		defer context.JSON(http.StatusOK, result)
+		defer c.JSON(http.StatusOK, result)
 		var fileInfo util.FileInfo
-		err := context.BindJSON(&fileInfo)
+		err := c.BindJSON(&fileInfo)
 		if err != nil {
 			result.Code = -1
 			result.Msg = fmt.Sprint(err)
@@ -193,7 +193,7 @@ func main() {
 	}
 
 	go func() {
-		cmd := exec.Command("cmd", "electron ./resources/app/")
+		cmd := exec.Command("cmd", "/C", "electron ./resources/app/")
 		cmd.Start()
 	}()
 

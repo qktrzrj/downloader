@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/gorilla/websocket"
+	"github.com/shopspring/decimal"
 	"io"
 	"log"
 	"net/http"
@@ -83,7 +84,7 @@ func (task *Task) init() (err error) {
 	task.bts = make(map[int]*bt)
 	task.undistributed = append([]*SegMent{}, &SegMent{
 		start: 0,
-		end:   task.FileLength,
+		end:   task.FileLength - 1,
 	})
 	task.DownloadCount = 0
 	if len(task.completed) > 0 {
@@ -117,7 +118,6 @@ func (task *Task) Start() error {
 				bt.start()
 				task.btLock.Lock()
 				delete(task.bts, bt.id)
-				task.btLock.Unlock()
 				log.Println(fmt.Sprintf("task %d, worker %d exit", task.Id, bt.id))
 				if len(task.bts) == 0 {
 					if task.Status == Paused {
@@ -137,6 +137,7 @@ func (task *Task) Start() error {
 					time.Sleep(time.Second)
 					go task.Exit()
 				}
+				task.btLock.Unlock()
 			}(task.bts[i])
 		}
 	}()
@@ -165,11 +166,19 @@ func (task *Task) speedCalculate() {
 			task.SpeedCount = 0
 			return
 		case <-t:
-			task.SpeedCount = (float64(task.DownloadCount) - float64(preDownCount)) / 1024
-			task.RemainingTime = (float64(task.FileLength-task.DownloadCount) / 1024) / task.SpeedCount
+			task.SpeedCount, _ = decimal.NewFromFloat(float64(task.DownloadCount) - float64(preDownCount)).Div(
+				decimal.NewFromFloat(1024)).Float64()
+			if decimal.NewFromFloat(task.SpeedCount).GreaterThan(decimal.NewFromFloat(0)) {
+				task.RemainingTime, _ = (decimal.NewFromFloat(float64(task.FileLength - task.DownloadCount)).Div(
+					decimal.NewFromFloat(1024))).Div(decimal.NewFromFloat(task.SpeedCount)).Float64()
+			}
 			if task.Conn != nil {
-				marshal, _ := json.Marshal(task)
-				_ = task.Conn.WriteMessage(websocket.TextMessage, marshal)
+				marshal, err := json.Marshal(task)
+				if err == nil {
+					_ = task.Conn.WriteMessage(websocket.TextMessage, marshal)
+				} else {
+					fmt.Println(err)
+				}
 			}
 		}
 	}
@@ -184,7 +193,7 @@ func (task *Task) getSeg() *SegMent {
 		return nil
 	}
 	segment := task.undistributed[length-1]
-	if segment.end-segment.start+1 > Download.SegSize {
+	if segment.end-segment.start+1 > Download.SegSize && task.renewal {
 		seg1 := &SegMent{
 			start:  segment.start,
 			end:    segment.start + Download.SegSize - 1,
@@ -193,7 +202,7 @@ func (task *Task) getSeg() *SegMent {
 		seg2 := &SegMent{
 			start:  seg1.end + 1,
 			end:    segment.end,
-			finish: seg1.end,
+			finish: seg1.end + 1,
 		}
 		task.undistributed = task.undistributed[:length-1]
 		task.undistributed = append(task.undistributed, seg2)
@@ -212,23 +221,32 @@ func (task *Task) segErr(segment *SegMent) {
 }
 
 // 写入文件
-func (task *Task) writeToDisk(segment *SegMent, buffer *bytes.Buffer) error {
-	_, err := task.file.Seek(segment.finish, io.SeekStart)
+func (task *Task) writeToDisk(segment *SegMent, buffer *bytes.Buffer) (err error) {
+	_, err = task.file.Seek(segment.finish, io.SeekStart)
 	if err != nil {
 		return err
 	}
 	//if seek != segment.start {
 	//	return errors.New("文件操作失败")
 	//}
-	_, err = buffer.WriteTo(task.file)
+	l, err := buffer.WriteTo(task.file)
 	if err != nil {
-		return err
+		return
+	}
+	segment.finish = segment.start + l - 1 // 片段写入磁盘偏移量
+	if segment.finish != segment.end {
+		err = errors.New("未下载完整")
+	}
+	seg := &SegMent{
+		start:  segment.start,
+		end:    segment.finish,
+		finish: segment.finish,
 	}
 	task.file.Sync()
 	task.completedLock.Lock()
-	task.completed = append(task.completed, segment)
+	task.completed = append(task.completed, seg)
 	task.completedLock.Unlock()
-	return nil
+	return
 }
 
 // 除去指定长度段的segment
