@@ -94,9 +94,6 @@ func (bt *bt) downSeg(segment *SegMent, timer *time.Timer) (err error) {
 			bufLen := int64(buf.Len())
 			if bufLen > 0 {
 				err = bt.task.writeToDisk(segment, buf)
-				if err == nil {
-					segment.finish = segment.start + bufLen - 1
-				}
 			}
 			return
 		}

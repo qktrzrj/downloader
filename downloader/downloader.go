@@ -88,6 +88,8 @@ func (d *Downloader) AddTask(fileInfo util.FileInfo, client *http.Client) (strin
 		client:     client,
 		Conn:       nil,
 	}
+	png, _ := os.OpenFile("./tmp/"+task.Id+".png", os.O_CREATE, 0644)
+	_ = png.Close()
 	// 添加任务
 	Download.ActiveTaskMap[task.Id] = task
 	// 将任务放入等待队列
@@ -102,16 +104,18 @@ func (d *Downloader) AddTask(fileInfo util.FileInfo, client *http.Client) (strin
 }
 
 // 暂停任务
-func (d *Downloader) pauseTask(id string) {
+func (d *Downloader) PauseTask(id string) {
 	task, ok := Download.ActiveTaskMap[id]
 	if !ok {
 	}
-	go task.Exit()
+	if len(task.bts) != 0 {
+		close(task.btCancel)
+	}
 	task.Status = Paused
 }
 
 // 继续任务
-func (d *Downloader) resumeTask(id string) {
+func (d *Downloader) ResumeTask(id string) {
 	task, ok := Download.ActiveTaskMap[id]
 	if !ok {
 		return
@@ -124,13 +128,18 @@ func (d *Downloader) resumeTask(id string) {
 }
 
 // 取消任务
-func (d *Downloader) cancelTask(id string) {
+func (d *Downloader) CancelTask(id string) {
 	Download.mapLock.Lock()
 	defer Download.mapLock.Unlock()
+	_ = os.Remove("./tmp/" + id + ".png")
 	task, ok := Download.ActiveTaskMap[id]
 	if !ok {
+		return
 	}
-	go task.Exit()
+	_ = os.Remove(task.SavePath)
+	if len(task.bts) != 0 {
+		close(task.btCancel)
+	}
 	task.file = nil
 	_ = os.Remove(task.SavePath)
 	delete(Download.ActiveTaskMap, id)
@@ -167,9 +176,11 @@ func (d *Downloader) openTask(id string) {
 }
 
 // 删除已完成任务
-func (d *Downloader) removeTask(id string) {
+func (d *Downloader) RemoveTask(id string) {
+	_ = os.Remove("./tmp/" + id + ".png")
 	task, ok := Download.CompleteTaskMap[id]
 	if !ok {
+		return
 	}
 	delete(Download.CompleteTaskMap, task.Id)
 }
@@ -206,29 +217,31 @@ func (d *Downloader) ListenEvent() {
 	for {
 		select {
 		case event := <-d.Event:
-			switch event.Enum {
-			case Pause:
-				d.pauseTask(event.TaskId)
-				break
-			case Resume:
-				d.resumeTask(event.TaskId)
-				break
-			case Cancel:
-				d.cancelTask(event.TaskId)
-				break
-			case Remove:
-				d.removeTask(event.TaskId)
-				break
-			case Open:
-				d.openTask(event.TaskId)
-				break
-			case Success:
-				d.successTask(event.TaskId)
-				break
-			case Schedule:
-				d.Schedule()
-				break
-			}
+			go func() {
+				switch event.Enum {
+				case Pause:
+					go d.PauseTask(event.TaskId)
+					break
+				case Resume:
+					go d.ResumeTask(event.TaskId)
+					break
+				case Cancel:
+					go d.CancelTask(event.TaskId)
+					break
+				case Remove:
+					go d.RemoveTask(event.TaskId)
+					break
+				case Open:
+					go d.openTask(event.TaskId)
+					break
+				case Success:
+					go d.successTask(event.TaskId)
+					break
+				case Schedule:
+					go d.Schedule()
+					break
+				}
+			}()
 		}
 	}
 }

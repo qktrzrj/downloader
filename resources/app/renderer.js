@@ -33,6 +33,7 @@ ws.onclose = function (evt) {
 
 function connect(id) {
     socket[id] = new WebSocket("ws://localhost:4800/getTaskInfo?id=" + id)
+    let item = document.getElementById(id)
     let bar = document.getElementById(id + 'progress')
     let state = document.getElementById(id + 'filestatus')
     let size = document.getElementById(id + 'downsize')
@@ -66,6 +67,7 @@ function connect(id) {
         size.innerText = downsize + size.innerText.slice(size.innerText.indexOf('Of'), size.innerText.length)
         if (data.status === 3) {
             getFileIcon(id, op)
+            item.removeChild(bar)
         }
         if (data.status === 1 || data.status === 2) {
             op.src = './icon/c_pau.png'
@@ -101,11 +103,14 @@ function additem(id, name, size) {
     itemdiv.className = 'item'
     itemdiv.id = id
     download.appendChild(itemdiv)
+    let itemopdiv = document.createElement('div')
+    itemopdiv.style = 'height: 50px;width: 50px;float: left'
+    itemdiv.appendChild(itemopdiv)
     let itemop = document.createElement('img')
     itemop.className = 'item-op'
     itemop.id = id + 'item-op'
     itemop.src = './icon/c_pauD.png'
-    itemdiv.appendChild(itemop)
+    itemopdiv.appendChild(itemop)
     let itemsp = document.createElement('div')
     itemsp.style = 'float:left;margin-left: auto;width: 1px;height: 100%;background: darkgray;'
     itemdiv.appendChild(itemsp)
@@ -164,12 +169,13 @@ function addListener(id) {
     let state = document.getElementById(id + 'filestatus')
 
     op.addEventListener('click', () => {
-        if (state === 'Downloading' || state === 'Waiting') {
+        if (state.innerText === 'Downloading' || state.innerText === 'Waiting') {
             operate(id, 1)
             return
         }
-        if (state !== 'Success') {
+        if (state.innerText !== 'Success') {
             operate(id, 2)
+            return
         }
         operate(id, 5)
     })
@@ -192,6 +198,7 @@ function addListener(id) {
 
     del.addEventListener('click', () => {
         if (del.src !== '') {
+            download.removeChild(item)
             if (state !== 'Success') {
                 operate(id, 3)
                 return
@@ -380,24 +387,16 @@ function getFileIcon(id, op) {
         let buffer = icon.toPNG();
         let fs = require('fs');
         let tmpFile = './tmp/' + id + '.png';
-        fs.open(tmpFile, 'w+', function (error, fd) {
-            if (error) {
-                console.log(error);
-                return false;
-            }
-            fd.write(buffer)
-            op.src = tmpFile
-            console.log('写入成功');
-        })
-        // let writerStream = fs.createWriteStream(tmpFile);
-        // writerStream.write(buffer);
-        // writerStream.end();  //标记文件末尾  结束写入流，释放资源
-        // writerStream.on('finish', function () {
-        //     console.log("写入完成。");
-        // });
-        // writerStream.on('error', function (error) {
-        //     console.log(error.stack);
-        // });
+        let writerStream = fs.createWriteStream(tmpFile);
+        writerStream.write(buffer);
+        writerStream.end();  //标记文件末尾  结束写入流，释放资源
+        writerStream.on('finish', function () {
+            op.src = './tmp/' + id + '.png'
+            console.log("写入完成。");
+        });
+        writerStream.on('error', function (error) {
+            console.log(error.stack);
+        });
     })
 }
 

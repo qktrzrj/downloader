@@ -235,7 +235,8 @@ func (task *Task) writeToDisk(segment *SegMent, buffer *bytes.Buffer) (err error
 	}
 	segment.finish = segment.start + l - 1 // 片段写入磁盘偏移量
 	if segment.finish != segment.end {
-		err = errors.New("未下载完整")
+		segment.start = segment.finish + 1
+		task.segErr(segment)
 	}
 	seg := &SegMent{
 		start:  segment.start,
