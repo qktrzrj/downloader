@@ -1,9 +1,10 @@
 // Modules to control application life and create native browser window
-const {app, BrowserWindow} = require('electron')
+const {app, BrowserWindow, Tray, Menu} = require('electron')
 
 // Keep a global reference of the window object, if you don't, the window will
 // be closed automatically when the JavaScript object is garbage collected.
 let mainWindow
+let setwin
 let ipcMain = require('electron').ipcMain
 
 // 限制只可以打开一个应用, 4.x的文档
@@ -27,6 +28,7 @@ function createWindow() {
         width: 800,
         height: 600,
         frame: false,
+        icon: './icon/app.png',
         webPreferences: {
             nodeIntegration: true
         }
@@ -44,6 +46,27 @@ function createWindow() {
         // in an array if your app supports multi windows, this is the time
         // when you should delete the corresponding element.
         mainWindow = null
+    })
+    //let appIcon = require('electron').nativeImage.createFromPath('./icon/app.png')
+    let tray = new Tray('./icon/app.png')
+    let contextMenu = Menu.buildFromTemplate([
+        {
+            label: '设置', click: () => {
+                setting()
+            }
+        },
+        {
+            label: '退出', click: () => {
+                app.quit()
+            }
+        },//我们需要在这里有一个真正的退出（这里直接强制退出）
+    ])
+
+    tray.setToolTip('下载器')
+    tray.setContextMenu(contextMenu)
+    tray.on('click', () => { //我们这里模拟桌面程序点击通知区图标实现打开关闭应用的功能
+        mainWindow.isVisible() ? mainWindow.hide() : mainWindow.show()
+        mainWindow.isVisible() ? mainWindow.setSkipTaskbar(false) : mainWindow.setSkipTaskbar(true);
     })
 }
 
@@ -74,3 +97,31 @@ app.on('activate', function () {
 ipcMain.on('window-close', function () {
     app.quit()
 })
+
+ipcMain.on('set-close', function () {
+    setwin.destroy()
+})
+
+ipcMain.on('set-min', function () {
+    setwin.minimize()
+})
+
+ipcMain.on('set-max', function () {
+    if (setwin.isMaximized()) {
+        setwin.unmaximize()
+    } else {
+        setwin.maximize()
+    }
+})
+
+function setting() {
+    setwin = new BrowserWindow({
+        parent: mainWindow, modal: true, show: false, frame: false, width: 550, height: 280,
+        icon: './icon/app.png'
+    })
+    setwin.loadFile('./setting.html')
+    setwin.once('ready-to-show', () => {
+        setwin.show()
+    })
+    setwin.webContents.openDevTools()
+}

@@ -2,7 +2,6 @@ let ipcRenderer = require('electron').ipcRenderer
 const {remote} = require('electron')
 const app = remote.app
 
-
 let zoom = document.getElementById('zoom')
 let minimize = document.getElementById('minimize')
 let close = document.getElementById('close')
@@ -23,6 +22,41 @@ let ws = new WebSocket("ws://localhost:4800/checkActive")
 //连接打开时触发
 ws.onopen = function (evt) {
     console.log("Connection open ...")
+}
+
+ws.onmessage = function (evt) {
+    let data
+    let err
+    try {
+        data = JSON.parse(evt.data)
+    } catch (e) {
+        console.log("json parse err:" + e)
+        err = true
+    }
+    if (err === true) {
+        return
+    }
+    if (data.op === 1 || data.op === 4 || data.op === 5) {
+        ipcRenderer.send('set-close')
+        return
+    }
+    if (data.op === 2) {
+        ipcRenderer.send('set-min')
+        return
+    }
+    if (data.op === 6) {
+        remote.dialog.showOpenDialog(remote.getCurrentWindow(), {
+            defaultPath: data.savePath,
+            properties: ['openDirectory']
+        }).then(function (res) {
+            if (!res.canceled) {
+                data.savePath = res.filePaths[0]
+                ws.send(JSON.stringify(data))
+            }
+        })
+        return;
+    }
+    ipcRenderer.send('set-max')
 }
 
 //连接关闭时触发
@@ -63,36 +97,52 @@ function connect(id) {
             downsize = parseInt(data.downloadCount / 1024) + ' KB '
         }
         bar.value = parseInt(data.downloadCount * 100 / data.filelength)
-        state.innerText = taskStatusMap.get(data.status)
         size.innerText = downsize + size.innerText.slice(size.innerText.indexOf('Of'), size.innerText.length)
-        if (data.status === 3) {
+        if (data.status === 3 && state.innerText !== 'Success') {
             getFileIcon(id, op)
             item.removeChild(bar)
+            state.style.display = 'none'
+            state.hidden = true
+            state.setAttribute('hidden', true)
+            let filename = document.getElementById(id + 'filename')
+            let myNotification = new Notification('下载完成', {
+                body: '文件' + filename + '下载完成！'
+            })
+            myNotification.onclick = () => {
+                myNotification.remove()
+            }
         }
         if (data.status === 1 || data.status === 2) {
             op.src = './icon/c_pau.png'
         }
         if (data.status === 4 || data.status === 5) {
             op.src = './icon/play1.png'
+            if (data.status === 5 && state.innerText !== 'Errored') {
+                let filename = document.getElementById(id + 'filename')
+                let myNotification = new Notification('下载失败', {
+                    body: '文件' + filename + '下载失败！'
+                })
+                myNotification.onclick = () => {
+                    myNotification.remove()
+                }
+            }
         }
+        state.innerText = taskStatusMap.get(data.status)
     }
     //连接关闭时触发
     socket[id].onclose = function (evt) {
         delete socket[id]
-        if (state.innerText === 'Errored' || state.innerText === 'Success') {
-            return
-        }
         if (state.innerText === 'Downloading' || state.innerText === 'Waiting') {
             state.innerText = 'Errored'
             op.src = './icon/play1.png'
-            return
         }
-        remote.dialog.showErrorBox('错误', '服务异常')
-        ipcRenderer.send('window-close')
     }
     //连接发生错误时触发
     socket[id].onerror = function (evt) {
         //如果出现连接、处理、接收、发送数据失败的时候触发onerror事件
+        if (state.innerText !== 'Success') {
+            state.innerText = 'Errored'
+        }
         console.log(error);
     }
 }
@@ -177,7 +227,7 @@ function addListener(id) {
             operate(id, 2)
             return
         }
-        operate(id, 5)
+        remote.dialog.showOpenDialog(remote.getcurrentWindow(), {defaultPath: savePath[id], properties: ['openFile']})
     })
 
     item.addEventListener('mouseover', () => {
@@ -198,8 +248,9 @@ function addListener(id) {
 
     del.addEventListener('click', () => {
         if (del.src !== '') {
+            let statu = state.innerText
             download.removeChild(item)
-            if (state !== 'Success') {
+            if (statu !== 'Success') {
                 operate(id, 3)
                 return
             }
@@ -317,7 +368,7 @@ function addfunc() {
                         {name: 'All Files', extensions: ['*']}
                     ]
                 }
-                let path = remote.dialog.showSaveDialogSync(options)
+                let path = remote.dialog.showSaveDialogSync(remote.getCurrentWindow(), options)
                 if (path === undefined) {
                     return
                 }
@@ -399,4 +450,6 @@ function getFileIcon(id, op) {
         });
     })
 }
+
+
 

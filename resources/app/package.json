@@ -1,8 +1,8 @@
 {
-  "name": "app",
-  "productName": "app",
-  "description": "My Electron application description",
-  "keywords": [],
+  "name": "downloader",
+  "productName": "downloader",
+  "description": "the fasted downloader",
+  "keywords": ["downloader"],
   "main": "./main.js",
   "version": "1.0.0",
   "author": "yan",

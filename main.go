@@ -28,6 +28,7 @@ var (
 	routineNum int
 	maxTaskNum int32
 	Conn       *websocket.Conn
+	SetConn    *websocket.Conn
 )
 
 var savePath = map[string]string{
@@ -108,6 +109,36 @@ func main() {
 	go downloader.Download.ListenEvent()
 
 	router := gin.Default()
+
+	router.GET("/getSetting", func(c *gin.Context) {
+		conn, err := (&websocket.Upgrader{CheckOrigin: func(r *http.Request) bool { return true }}).Upgrade(
+			c.Writer, c.Request, nil)
+		if err != nil {
+			http.NotFound(c.Writer, c.Request)
+			return
+		}
+		SetConn = conn
+		_ = conn.WriteJSON(downloader.Download)
+		var operate struct {
+			Op            int    `json:"op"`
+			SavePath      string `json:"savePath"`
+			MaxRoutineNum int    `json:"maxRoutineNum"`
+		}
+		for {
+			err := conn.ReadJSON(&operate)
+			if err == nil {
+				_ = Conn.WriteJSON(operate)
+				if operate.Op == 5 {
+					downloader.Download.SavePath = operate.SavePath
+					downloader.Download.MaxRoutineNum = operate.MaxRoutineNum
+				}
+			}
+			if e, ok := err.(*websocket.CloseError); ok && e.Code == 1001 {
+				return
+			}
+		}
+	})
+
 	router.GET("/getFileInfo", func(c *gin.Context) {
 		result := util.NewResult()
 		defer c.JSON(http.StatusOK, result)
@@ -182,7 +213,20 @@ func main() {
 			log.Fatal("主动断开链接")
 			return nil
 		})
-		_, _, _ = Conn.ReadMessage()
+		var operate struct {
+			Op            int    `json:"op"`
+			SavePath      string `json:"savePath"`
+			MaxRoutineNum int    `json:"maxRoutineNum"`
+		}
+		for {
+			err := Conn.ReadJSON(&operate)
+			if err == nil {
+				_ = SetConn.WriteJSON(operate)
+			}
+			if e, ok := err.(*websocket.CloseError); ok && e.Code == 1001 {
+				return
+			}
+		}
 	})
 
 	server := &http.Server{
@@ -191,11 +235,6 @@ func main() {
 		ReadTimeout:  60 * time.Second,
 		WriteTimeout: 60 * time.Second,
 	}
-
-	go func() {
-		cmd := exec.Command("cmd", "/C", "electron ./resources/app/")
-		cmd.Start()
-	}()
 
 	go func() {
 		if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {

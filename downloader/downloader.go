@@ -33,17 +33,17 @@ var commands = map[string]string{
 
 // 下载器
 type Downloader struct {
-	MaxRoutineNum    int
-	SegSize          int64
-	BufferSize       int64
-	Event            chan DownloadEvent
-	SavePath         string
+	MaxRoutineNum    int                `json:"maxRoutineNum"`
+	SegSize          int64              `json:"-"`
+	BufferSize       int64              `json:"-"`
+	Event            chan DownloadEvent `json:"-"`
+	SavePath         string             `json:"savePath"`
 	activeTaskNum    int32
-	MaxActiveTaskNum int32
-	ActiveTaskMap    map[string]*Task //未完成的任务
-	CompleteTaskMap  map[string]*Task //已完成的任务
+	MaxActiveTaskNum int32            `json:"-"`
+	ActiveTaskMap    map[string]*Task `json:"-"` //未完成的任务
+	CompleteTaskMap  map[string]*Task `json:"-"` //已完成的任务
 	mapLock          sync.Mutex
-	TaskQueue        *ItemQueue
+	TaskQueue        *ItemQueue `json:"-"`
 }
 
 // 下载器事件
