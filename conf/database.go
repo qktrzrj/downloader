@@ -25,11 +25,11 @@ const (
 )
 
 func init() {
-	if !util.FileExist("conf/downloader.db") {
-		dbFile, _ := os.OpenFile("conf/downloader.db", os.O_CREATE, 0644)
+	if !util.FileExist("data/downloader.db") {
+		dbFile, _ := os.OpenFile("data/downloader.db", os.O_CREATE, 0644)
 		_ = dbFile.Close()
 	}
-	DB, err := sql.Open("sqlite3", "conf/downloader.db")
+	DB, err := sql.Open("sqlite3", "data/downloader.db")
 	if err != nil {
 		log.Fatalln("数据库启动失败")
 	}

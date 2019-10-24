@@ -5,6 +5,7 @@ const {app, BrowserWindow, Tray, Menu} = require('electron')
 // be closed automatically when the JavaScript object is garbage collected.
 let mainWindow
 let setwin
+let tray
 let ipcMain = require('electron').ipcMain
 
 // 限制只可以打开一个应用, 4.x的文档
@@ -48,7 +49,7 @@ function createWindow() {
         mainWindow = null
     })
     //let appIcon = require('electron').nativeImage.createFromPath('./icon/app.png')
-    let tray = new Tray('./icon/app.png')
+    tray = new Tray('./icon/app.png')
     let contextMenu = Menu.buildFromTemplate([
         {
             label: '设置', click: () => {

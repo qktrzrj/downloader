@@ -52,7 +52,7 @@ func InitRouter() *gin.Engine {
 				}
 				continue
 			}
-			if _, ok := err.(*net.OpError); ok || websocket.IsCloseError(err, 1001) {
+			if _, ok := err.(*net.OpError); ok || websocket.IsCloseError(err, 1001, 1006) {
 				return
 			}
 		}
@@ -146,7 +146,7 @@ func InitRouter() *gin.Engine {
 				_ = SetConn.WriteJSON(operate)
 				continue
 			}
-			if _, ok := err.(*net.OpError); ok || websocket.IsCloseError(err, 1001) {
+			if _, ok := err.(*net.OpError); ok || websocket.IsCloseError(err, 1001, 1006) {
 				downloader.Download.BeforeExit()
 				time.Sleep(time.Second)
 				log.Fatal("断开链接")

@@ -2,7 +2,9 @@
   "name": "downloader",
   "productName": "downloader",
   "description": "the fasted downloader",
-  "keywords": ["downloader"],
+  "keywords": [
+    "downloader"
+  ],
   "main": "./main.js",
   "version": "1.0.0",
   "author": "yan",
@@ -11,6 +13,6 @@
   },
   "dependencies": {},
   "devDependencies": {
-    "electron": "6.0.12"
+    "electron": "7.0.0"
   }
 }

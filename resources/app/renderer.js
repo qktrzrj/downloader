@@ -45,7 +45,7 @@ ws.onmessage = function (evt) {
         return
     }
     if (data.op === 6) {
-        remote.dialog.showOpenDialog(remote.getCurrentWindow(), {
+        remote.dialog.showOpenDialogSync(remote.getCurrentWindow(), {
             defaultPath: data.savePath,
             properties: ['openDirectory']
         }).then(function (res) {
