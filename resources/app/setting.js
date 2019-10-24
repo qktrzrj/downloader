@@ -49,11 +49,13 @@ function ShowPrompt(objEvent) {
 
 function HiddenPrompt() {
     divObj = document.getElementById("promptDiv");
+    divObj.innerText = thread.value
     divObj.style.visibility = "hidden";
 }
 
-if (divObj){
-    divObj.addEventListener('mousemove',(event)=>{
+if (divObj) {
+    divObj.addEventListener('mousemove', (event) => {
+        divObj.innerText = thread.value
         //使用这一行代码，提示层将出现在鼠标附近(如要使用，记得注释 divOjb.style.left = 60+5; 这一句)
         divObj.style.marginLeft = event.clientX + 5;   //clientX 为鼠标在窗体中的 x 坐标值
         // divObj.style.left = 60 + 5;
@@ -80,7 +82,7 @@ if (path) {
         let data = {
             op: 6,
             savePath: path.innerText,
-            maxRoutineNum: threadnum
+            maxRoutineNum: parseInt(threadnum)
         }
         set.send(JSON.stringify(data))
     })
@@ -93,7 +95,7 @@ if (save) {
         let data = {
             op: 5,
             savePath: savepath,
-            maxRoutineNum: threadnum
+            maxRoutineNum: parseInt(threadnum)
         }
         set.send(JSON.stringify(data))
     })
@@ -106,7 +108,7 @@ if (cancel) {
         let data = {
             op: 4,
             savePath: savepath,
-            maxRoutineNum: threadnum
+            maxRoutineNum: parseInt(threadnum)
         }
         set.send(JSON.stringify(data))
     })
@@ -133,7 +135,7 @@ if (close) {
         let data = {
             op: 1,
             savePath: savepath,
-            maxRoutineNum: threadnum
+            maxRoutineNum: parseInt(threadnum)
         }
         set.send(JSON.stringify(data))
         close.setAttribute('src', './icon/close.png')
@@ -149,7 +151,7 @@ if (minimize) {
         let data = {
             op: 2,
             savePath: savepath,
-            maxRoutineNum: threadnum
+            maxRoutineNum: parseInt(threadnum)
         }
         set.send(JSON.stringify(data))
         minimize.setAttribute('src', './icon/minimize.png')
@@ -164,7 +166,7 @@ if (zoom) {
         let data = {
             op: 3,
             savePath: savepath,
-            maxRoutineNum: threadnum
+            maxRoutineNum: parseInt(threadnum)
         }
         set.send(JSON.stringify(data))
         zoom.setAttribute('src', './icon/zoom.png')

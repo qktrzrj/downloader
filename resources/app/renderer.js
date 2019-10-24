@@ -152,7 +152,7 @@ function additem(id, name, size) {
     let itemdiv = document.createElement('div')
     itemdiv.className = 'item'
     itemdiv.id = id
-    download.appendChild(itemdiv)
+    download.insertBefore(itemdiv, download.firstChild)
     let itemopdiv = document.createElement('div')
     itemopdiv.style = 'height: 50px;width: 50px;float: left'
     itemdiv.appendChild(itemopdiv)
@@ -206,15 +206,15 @@ function additem(id, name, size) {
     let del = document.createElement('img')
     del.className = 'item-delete'
     del.id = id + 'item-delete'
-    del.src = ''
-    download.appendChild(del)
+    del.src = 'icon/delete.png'
+    itemdiv.appendChild(del)
     countuner()
 }
 
 
 function addListener(id) {
     let op = document.getElementById(id + 'item-op')
-    let item = document.getElementById(id + 'item-ex')
+    let itemex = document.getElementById(id + 'item-ex')
     let del = document.getElementById(id + 'item-delete')
     let state = document.getElementById(id + 'filestatus')
 
@@ -227,28 +227,29 @@ function addListener(id) {
             operate(id, 2)
             return
         }
-        remote.dialog.showOpenDialog(remote.getcurrentWindow(), {defaultPath: savePath[id], properties: ['openFile']})
+        remote.dialog.showOpenDialog(remote.getCurrentWindow(), {defaultPath: savePath[id], properties: ['openFile']})
     })
 
-    item.addEventListener('mouseover', () => {
-        del.src = 'icon/delete.png'
+    itemex.addEventListener('mouseover', () => {
+        del.style.display = 'block'
     })
 
-    item.addEventListener('mouseleave', () => {
-        del.src = ''
+    itemex.addEventListener('mouseleave', () => {
+        del.style.display = 'none'
     })
 
     del.addEventListener('mouseover', () => {
-        del.src = 'icon/delete.png'
+        del.style.display = 'block'
     })
 
     del.addEventListener('mouseleave', () => {
-        del.src = ''
+        del.style.display = 'none'
     })
 
     del.addEventListener('click', () => {
         if (del.src !== '') {
             let statu = state.innerText
+            let item = document.getElementById(id)
             download.removeChild(item)
             if (statu !== 'Success') {
                 operate(id, 3)
@@ -372,8 +373,12 @@ function addfunc() {
                 if (path === undefined) {
                     return
                 }
-                data.data.savepath = path.slice(0, path.lastIndexOf('/') + 1)
-                data.data.filename = path.slice(path.lastIndexOf("/") + 1, path.length)
+                let index = path.lastIndexOf('/')
+                if (index === -1) {
+                    index = path.lastIndexOf('\\')
+                }
+                data.data.savepath = path.slice(0, index + 1)
+                data.data.filename = path.slice(index + 1, path.length)
                 fetch('http://localhost:4800/addTask', {
                     method: 'POST',
                     body: JSON.stringify(data.data),

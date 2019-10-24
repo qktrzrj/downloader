@@ -2,6 +2,7 @@ package downloader
 
 import (
 	"bytes"
+	"downloader/conf"
 	"downloader/util"
 	"encoding/json"
 	"errors"
@@ -118,13 +119,14 @@ func (task *Task) Start() error {
 				bt.start()
 				task.btLock.Lock()
 				delete(task.bts, bt.id)
-				log.Println(fmt.Sprintf("task %d, worker %d exit", task.Id, bt.id))
+				log.Println(fmt.Sprintf("task %s, worker %d exit", task.Id, bt.id))
 				if len(task.bts) == 0 {
 					if task.Status == Paused {
-						log.Println(fmt.Sprintf("任务:%d 暂停成功！", task.Id))
+						log.Println(fmt.Sprintf("任务:%s 暂停成功！", task.Id))
 					}
 					if task.Status == Errored {
-						log.Println(fmt.Sprintf("任务:%d 下载失败！", task.Id))
+						_, _ = conf.TaskUpdate.Exec(conf.ERRORED, task.Id)
+						log.Println(fmt.Sprintf("任务:%s 下载失败！", task.Id))
 					}
 					if task.Status == Downloading {
 						task.Status = Over
@@ -234,18 +236,19 @@ func (task *Task) writeToDisk(segment *SegMent, buffer *bytes.Buffer) (err error
 		return
 	}
 	segment.finish = segment.start + l - 1 // 片段写入磁盘偏移量
-	if segment.finish != segment.end {
-		segment.start = segment.finish + 1
-		task.segErr(segment)
-	}
 	seg := &SegMent{
 		start:  segment.start,
 		end:    segment.finish,
 		finish: segment.finish,
 	}
+	if segment.finish != segment.end && task.renewal {
+		segment.start = segment.finish + 1
+		task.segErr(segment)
+	}
 	task.file.Sync()
 	task.completedLock.Lock()
 	task.completed = append(task.completed, seg)
+	_, _ = conf.SegInsert.Exec(task.Id, seg.start, seg.end, seg.finish)
 	task.completedLock.Unlock()
 	return
 }

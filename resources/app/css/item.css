@@ -42,18 +42,20 @@
 .item-info {
     float: left;
     height: 50px;
-    width: 50%;
+    width: 70%;
     margin-left: 10px;
     margin-top: 5px;
+    overflow: hidden;
 }
 
 .filename {
     margin: 10px;
-    font-size: 18px;
+    font-size: 15px;
     /* 字体颜色 */
     color: #000000;
     -webkit-user-select: none;
-    user-select: none
+    user-select: none;
+    overflow: hidden;
 }
 
 .filenum {
@@ -87,10 +89,10 @@
 .item-delete {
     float: right;
     margin-top: -35px;
-    margin-right: 1%;
+    margin-right: -5%;
     display: none;
     -webkit-user-select: none;
-    user-select: none
+    user-select: none;
 }
 
 .progress {

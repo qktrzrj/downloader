@@ -1,233 +1,31 @@
 package main
 
 import (
-	"bytes"
 	"database/sql"
+	"downloader/conf"
 	"downloader/downloader"
-	"downloader/util"
-	"errors"
-	"fmt"
-	"github.com/gin-gonic/gin"
-	"github.com/gorilla/websocket"
-	_ "github.com/mattn/go-sqlite3"
+	"downloader/routers"
 	"golang.org/x/net/context"
 	"log"
 	"net/http"
 	"os"
-	"os/exec"
 	"os/signal"
-	"os/user"
-	"runtime"
-	"strings"
 	"time"
 )
 
-var (
-	db         *sql.DB
-	allPath    string
-	routineNum int
-	maxTaskNum int32
-	Conn       *websocket.Conn
-	SetConn    *websocket.Conn
-)
-
-var savePath = map[string]string{
-	"windows": `\Downloads\`,
-	"darwin":  `/Download/`,
-}
-
-func homeUnix() (string, error) {
-	// First prefer the HOME environmental variable
-	if home := os.Getenv("HOME"); home != "" {
-		return home, nil
-	}
-
-	// If that fails, try the shell
-	var stdout bytes.Buffer
-	cmd := exec.Command("sh", "-c", "eval echo ~$USER")
-	cmd.Stdout = &stdout
-	if err := cmd.Run(); err != nil {
-		return "", err
-	}
-
-	result := strings.TrimSpace(stdout.String())
-	if result == "" {
-		return "", errors.New("blank output when reading home directory")
-	}
-
-	return result, nil
-}
-
-func homeWindows() (string, error) {
-	drive := os.Getenv("HOMEDRIVE")
-	path := os.Getenv("HOMEPATH")
-	home := drive + path
-	if drive == "" || path == "" {
-		home = os.Getenv("USERPROFILE")
-	}
-	if home == "" {
-		return "", errors.New("HOMEDRIVE, HOMEPATH, and USERPROFILE are blank")
-	}
-
-	return home, nil
-}
-
-func init() {
-	routineNum = 40
-	maxTaskNum = 3
-
-	current, err := user.Current()
-	if err == nil {
-		allPath = current.HomeDir + savePath[runtime.GOOS]
-		return
-	}
-	if "windows" == runtime.GOOS {
-		s, err := homeWindows()
-		if err != nil {
-			allPath = s + savePath["windows"]
-			return
-		}
-	}
-	// Unix-like system, so just assume Unix
-	s, err := homeUnix()
-	if err != nil {
-		allPath = s + savePath["windows"]
-		return
-	}
-}
-
 func main() {
 	//url := "https://download.jetbrains.8686c.com/idea/ideaIC-2019.2.2.dmg"
-	//db, _ = sql.Open("sqlite3", "./downloader.db")
+	conf.DB, _ = sql.Open("sqlite3", "conf/downloader.db")
 	downloader.Download = downloader.Downloader{
-		MaxRoutineNum:    routineNum,
-		SegSize:          1024 * 1024,
-		SavePath:         allPath,
-		MaxActiveTaskNum: maxTaskNum,
+		MaxRoutineNum:    conf.RoutineNum,
+		SegSize:          500 * 1024,
+		SavePath:         conf.AllPath,
+		MaxActiveTaskNum: conf.MaxTaskNum,
 	}
 	downloader.Download.Init()
 	go downloader.Download.ListenEvent()
 
-	router := gin.Default()
-
-	router.GET("/getSetting", func(c *gin.Context) {
-		conn, err := (&websocket.Upgrader{CheckOrigin: func(r *http.Request) bool { return true }}).Upgrade(
-			c.Writer, c.Request, nil)
-		if err != nil {
-			http.NotFound(c.Writer, c.Request)
-			return
-		}
-		SetConn = conn
-		_ = conn.WriteJSON(downloader.Download)
-		var operate struct {
-			Op            int    `json:"op"`
-			SavePath      string `json:"savePath"`
-			MaxRoutineNum int    `json:"maxRoutineNum"`
-		}
-		for {
-			err := conn.ReadJSON(&operate)
-			if err == nil {
-				_ = Conn.WriteJSON(operate)
-				if operate.Op == 5 {
-					downloader.Download.SavePath = operate.SavePath
-					downloader.Download.MaxRoutineNum = operate.MaxRoutineNum
-				}
-			}
-			if e, ok := err.(*websocket.CloseError); ok && e.Code == 1001 {
-				return
-			}
-		}
-	})
-
-	router.GET("/getFileInfo", func(c *gin.Context) {
-		result := util.NewResult()
-		defer c.JSON(http.StatusOK, result)
-		fileInfo, err := util.GetFileInfo(c.Query("url"), util.NewClient())
-		if err != nil {
-			result.Code = -1
-			result.Msg = fmt.Sprint(err)
-			return
-		}
-		fileInfo.SavePath = downloader.Download.SavePath
-		result.Data = fileInfo
-	})
-
-	router.POST("/addTask", func(c *gin.Context) {
-		result := util.NewResult()
-		defer c.JSON(http.StatusOK, result)
-		var fileInfo util.FileInfo
-		err := c.BindJSON(&fileInfo)
-		if err != nil {
-			result.Code = -1
-			result.Msg = fmt.Sprint(err)
-			return
-		}
-		id, err := downloader.Download.AddTask(fileInfo, util.NewClient())
-		if err != nil {
-			result.Code = -1
-			result.Msg = fmt.Sprint(err)
-			return
-		}
-		result.Data = id
-	})
-
-	router.POST("/operate", func(context *gin.Context) {
-		result := util.NewResult()
-		defer context.JSON(http.StatusOK, result)
-		var event downloader.DownloadEvent
-		err := context.BindJSON(&event)
-		if err != nil {
-			result.Code = -1
-			result.Msg = fmt.Sprint(err)
-			return
-		}
-		downloader.Download.Event <- event
-	})
-
-	router.GET("/getTaskInfo", func(c *gin.Context) {
-		// change the reqest to websocket model
-		conn, err := (&websocket.Upgrader{CheckOrigin: func(r *http.Request) bool { return true }}).Upgrade(
-			c.Writer, c.Request, nil)
-		if err != nil {
-			http.NotFound(c.Writer, c.Request)
-			return
-		}
-		task, ok := downloader.Download.ActiveTaskMap[c.Query("id")]
-		if !ok {
-			_ = conn.Close()
-			return
-		}
-		task.Conn = conn
-	})
-
-	router.GET("/checkActive", func(c *gin.Context) {
-		// change the reqest to websocket model
-		conn, err := (&websocket.Upgrader{CheckOrigin: func(r *http.Request) bool { return true }}).Upgrade(
-			c.Writer, c.Request, nil)
-		if err != nil {
-			http.NotFound(c.Writer, c.Request)
-			return
-		}
-		Conn = conn
-		Conn.SetCloseHandler(func(code int, text string) error {
-			log.Fatal("主动断开链接")
-			return nil
-		})
-		var operate struct {
-			Op            int    `json:"op"`
-			SavePath      string `json:"savePath"`
-			MaxRoutineNum int    `json:"maxRoutineNum"`
-		}
-		for {
-			err := Conn.ReadJSON(&operate)
-			if err == nil {
-				_ = SetConn.WriteJSON(operate)
-			}
-			if e, ok := err.(*websocket.CloseError); ok && e.Code == 1001 {
-				return
-			}
-		}
-	})
+	router := routers.InitRouter()
 
 	server := &http.Server{
 		Addr:         ":4800",

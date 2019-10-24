@@ -28,7 +28,7 @@ func (bt *bt) start() {
 	errNum := 0
 	for {
 		if errNum >= 3 && bt.task.Status == Downloading {
-			log.Println(fmt.Sprintf("task %d, worker %d error", bt.task.Id, bt.id))
+			log.Println(fmt.Sprintf("task %s, worker %d error", bt.task.Id, bt.id))
 			bt.task.Status = Errored
 			close(bt.task.btCancel)
 			break
@@ -46,7 +46,7 @@ func (bt *bt) start() {
 				if segment.finish != segment.start {
 					segment.start = segment.finish + 1
 				}
-				log.Println(fmt.Sprintf("task %d, worker %d segment start %d end %d error %v",
+				log.Println(fmt.Sprintf("task %s, worker %d segment start %d end %d error %v",
 					bt.task.Id, bt.id, segment.start, segment.end, err))
 				errNum++
 				bt.task.segErr(segment)
@@ -95,6 +95,7 @@ func (bt *bt) downSeg(segment *SegMent, timer *time.Timer) (err error) {
 			if bufLen > 0 {
 				err = bt.task.writeToDisk(segment, buf)
 			}
+			buf.Reset()
 			return
 		}
 		if l <= 0 {

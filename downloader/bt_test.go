@@ -1,6 +1,8 @@
 package downloader
 
 import (
+	"database/sql"
+	"downloader/conf"
 	"downloader/util"
 	"fmt"
 	"os"
@@ -13,10 +15,11 @@ import (
 )
 
 func TestBt__downSeg(t *testing.T) {
-	url := "https://riotgamespatcher-a.akamaihd.net/KR_Live_Mac/installer/deploy/League of Legends installer KR.dmg"
+	url := "https://www.sqlite.org/2019/sqlite-dll-win64-x64-3300100.zip"
+	conf.DB, _ = sql.Open("sqlite3", "conf/downloader.db")
 	Download = Downloader{
-		MaxRoutineNum:    10,
-		SegSize:          1024 * 1024,
+		MaxRoutineNum:    1,
+		SegSize:          500 * 1024,
 		BufferSize:       0,
 		SavePath:         "./",
 		MaxActiveTaskNum: 3,

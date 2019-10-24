@@ -2,9 +2,9 @@
 <html>
 <head>
     <meta charset="UTF-8">
-    <link rel="stylesheet" href="setting.css">
-    <link rel="stylesheet" href="top.css">
-    <link rel="stylesheet" href="main.css">
+    <link rel="stylesheet" href="css/setting.css">
+    <link rel="stylesheet" href="css/top.css">
+    <link rel="stylesheet" href="css/main.css">
     <style>
         ::-webkit-scrollbar {
             display: none;
@@ -12,12 +12,10 @@
 
         .promptStyle {
             /*border: dashed 1px rgba(0, 0, 0, 0);*/
-            width: 50px;
-            height: 50px;
             visibility: hidden;
             background-color: rgba(0, 0, 0, 0);
-            float: left;
-            position: absolute;
+            /*float: left;*/
+            /*position: absolute;*/
         }
     </style>
 </head>
@@ -34,7 +32,10 @@
           id="path"></span>
     <span style="font-size: 12px;color: darkgrey;-webkit-user-select: none;user-select: none;margin-left: 10px">
         <br/><br/>合理设置线程数量有助于提高下载速度<br/><br/></span>
-    <span style="-webkit-user-select: none;user-select: none;margin-left: 10px">下载可调线程<br/><br/></span>
+    <span style="-webkit-user-select: none;user-select: none;margin-left: 10px">下载可调线程:</span>
+    <span id="promptDiv" class="promptStyle">
+        0
+    </span>
     <label for='setting'></label><input type='range' id='thread' value='0' min="0" max="100"/>
     <div style="background-color: #dedede;margin-top: 30px;width: 100%">
         <span style="border: 0;float: left;-webkit-user-select: none;user-select: none;margin: 5px"
@@ -42,9 +43,6 @@
         <span style="border: 0;color: #059CFA;float: right;-webkit-user-select: none;user-select: none;margin: 5px"
               id="set-save">保存</span>
     </div>
-</div>
-<div id="promptDiv" class="promptStyle">
-    0
 </div>
 <script src="setting.js">
     // // You can also require other files to run in this process
