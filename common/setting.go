@@ -1,7 +1,6 @@
-package conf
+package common
 
 import (
-	"downloader/util"
 	"github.com/go-ini/ini"
 	"log"
 	"os/user"
@@ -51,6 +50,9 @@ func SetValue(path string, routineNum int, maxTaskNum int) {
 	sec.Key("SAVE_PATH").SetValue(path)
 	sec.Key("ROUTINE_NUM").SetValue(strconv.Itoa(routineNum))
 	sec.Key("MAX_TASK_NUM").SetValue(strconv.Itoa(maxTaskNum))
+	_ = Cfg.SaveTo("data/app.ini")
+	AllPath = path
+	RoutineNum = routineNum
 }
 
 func defaultSavePath() string {
@@ -61,14 +63,14 @@ func defaultSavePath() string {
 		return path
 	}
 	if "windows" == runtime.GOOS {
-		s, err := util.HomeWindows()
+		s, err := HomeWindows()
 		if err != nil {
 			path = s + SavePath["windows"]
 			return path
 		}
 	}
 	// Unix-like system, so just assume Unix
-	s, err := util.HomeUnix()
+	s, err := HomeUnix()
 	if err != nil {
 		path = s + SavePath["windows"]
 		return path

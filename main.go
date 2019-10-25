@@ -2,7 +2,7 @@ package main
 
 import (
 	"database/sql"
-	"downloader/conf"
+	"downloader/common"
 	"downloader/downloader"
 	"downloader/routers"
 	"golang.org/x/net/context"
@@ -15,12 +15,12 @@ import (
 
 func main() {
 	//url := "https://download.jetbrains.8686c.com/idea/ideaIC-2019.2.2.dmg"
-	conf.DB, _ = sql.Open("sqlite3", "conf/downloader.db")
+	common.DB, _ = sql.Open("sqlite3", "conf/downloader.db")
 	downloader.Download = downloader.Downloader{
-		MaxRoutineNum:    conf.RoutineNum,
+		MaxRoutineNum:    common.RoutineNum,
 		SegSize:          500 * 1024,
-		SavePath:         conf.AllPath,
-		MaxActiveTaskNum: conf.MaxTaskNum,
+		SavePath:         common.AllPath,
+		MaxActiveTaskNum: common.MaxTaskNum,
 	}
 	downloader.Download.Init()
 	go downloader.Download.ListenEvent()

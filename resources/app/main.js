@@ -5,6 +5,8 @@ const {app, BrowserWindow, Tray, Menu} = require('electron')
 // be closed automatically when the JavaScript object is garbage collected.
 let mainWindow
 let setwin
+let download
+let loading
 let tray
 let ipcMain = require('electron').ipcMain
 
@@ -53,6 +55,7 @@ function createWindow() {
     let contextMenu = Menu.buildFromTemplate([
         {
             label: '设置', click: () => {
+                // 打开设置界面
                 setting()
             }
         },
@@ -95,6 +98,8 @@ app.on('activate', function () {
 
 // In this file you can include the rest of your app's specific main process
 // code. You can also put them in separate files and require them here.
+
+
 ipcMain.on('window-close', function () {
     app.quit()
 })
@@ -107,17 +112,48 @@ ipcMain.on('set-min', function () {
     setwin.minimize()
 })
 
-ipcMain.on('set-max', function () {
-    if (setwin.isMaximized()) {
-        setwin.unmaximize()
-    } else {
-        setwin.maximize()
-    }
+ipcMain.on('file-close', function () {
+    download.destroy()
+})
+
+ipcMain.on('file-min', function () {
+    download.minimize()
+})
+
+// 打开下载列表界面
+ipcMain.on('download', function () {
+    download = new BrowserWindow({
+        parent: mainWindow, modal: true, show: false, frame: false, width: 300, height: 600,
+        resizable: false,
+        icon: './icon/app.png'
+    })
+    download.loadFile('./filelist.html')
+    download.once('ready-to-show', () => {
+        download.show()
+    })
+    download.webContents.openDevTools()
+})
+
+// 加载界面
+ipcMain.on('loading', function () {
+    loading = new BrowserWindow({
+        parent: mainWindow, modal: true, show: false, frame: false, width: 400, height: 400,
+        resizable: false,transparent: true
+    })
+    loading.loadFile('./loading.html')
+    loading.once('ready-to-show', () => {
+        loading.show()
+    })
+})
+
+ipcMain.on('load-close', function () {
+    loading.destroy()
 })
 
 function setting() {
     setwin = new BrowserWindow({
         parent: mainWindow, modal: true, show: false, frame: false, width: 550, height: 280,
+        resizable: false,
         icon: './icon/app.png'
     })
     setwin.loadFile('./setting.html')

@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <link rel="stylesheet" href="css/top.css">
+    <link rel="stylesheet" href="css/main.css">
+</head>
+<body>
+<div class="topbar">
+    <img class="max-min-close" src="./icon/close.png" id="file-close" alt="">
+    <img class="max-min-close" src="./icon/minimize.png" id="file-minimize" alt="">
+    <img class="max-min-close" src="./icon/disable.png" id="file-zoom" alt="">
+</div>
+<div id="app" class="app">
+    <div style="margin-left: 2.5%;width: 95%;height: 90%;margin-top: 2.5%;background-color: white;overflow: auto;"
+         id="list">
+        <div style="margin-top: 5px"><input type="checkbox" value="1"><span>233</span></div>
+        <div><input type="checkbox" value=""><span>233</span></div>
+    </div>
+    <div>
+        <button style="margin-left: 5%;float: left" id="file-cancel">取消全选</button>
+        <button style="margin-right: 5%;color:white;background-color: #059CFA;float: right" id="file-save">确定</button>
+    </div>
+</div>
+<script src="filelist.js">
+    // // You can also require other files to run in this process
+    // require('./setting.js')
+</script>
+</body>
+</html>

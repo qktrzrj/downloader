@@ -2,7 +2,7 @@ let savepath
 let threadnum
 let path = document.getElementById('path')
 let thread = document.getElementById('thread')
-let zoom = document.getElementById('set-zoom')
+// let zoom = document.getElementById('set-zoom')
 let minimize = document.getElementById('set-minimize')
 let close = document.getElementById('set-close')
 let cancel = document.getElementById('set-cancel')
@@ -119,12 +119,12 @@ function mouseListener(ac) {
     if (ac === 1) {
         close.setAttribute('src', './icon/close-rollover.png');
         minimize.setAttribute('src', './icon/minimize-rollover.png')
-        zoom.setAttribute('src', './icon/zoom-rollover.png')
+        // zoom.setAttribute('src', './icon/zoom-rollover.png')
         return
     }
     close.setAttribute('src', './icon/close.png');
     minimize.setAttribute('src', './icon/minimize.png')
-    zoom.setAttribute('src', './icon/zoom.png')
+    // zoom.setAttribute('src', './icon/zoom.png')
 }
 
 if (close) {
@@ -158,17 +158,17 @@ if (minimize) {
     })
 }
 
-if (zoom) {
-    zoom.addEventListener('mouseover', () => mouseListener(1))
-    zoom.addEventListener('mouseleave', () => mouseListener(2))
-    zoom.addEventListener('click', () => {
-        zoom.setAttribute('src', './icon/zoom-pressed.png')
-        let data = {
-            op: 3,
-            savePath: savepath,
-            maxRoutineNum: parseInt(threadnum)
-        }
-        set.send(JSON.stringify(data))
-        zoom.setAttribute('src', './icon/zoom.png')
-    })
-}
+// if (zoom) {
+//     zoom.addEventListener('mouseover', () => mouseListener(1))
+//     zoom.addEventListener('mouseleave', () => mouseListener(2))
+//     zoom.addEventListener('click', () => {
+//         zoom.setAttribute('src', './icon/zoom-pressed.png')
+//         let data = {
+//             op: 3,
+//             savePath: savepath,
+//             maxRoutineNum: parseInt(threadnum)
+//         }
+//         set.send(JSON.stringify(data))
+//         zoom.setAttribute('src', './icon/zoom.png')
+//     })
+// }

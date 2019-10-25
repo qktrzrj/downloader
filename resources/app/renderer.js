@@ -18,7 +18,7 @@ let taskStatusMap = new Map([
     [5, 'Errored']
 ])
 
-let ws = new WebSocket("ws://localhost:4800/checkActive")
+let ws = new WebSocket("ws://localhost:4800/main")
 //连接打开时触发
 ws.onopen = function (evt) {
     console.log("Connection open ...")
@@ -35,6 +35,11 @@ ws.onmessage = function (evt) {
     }
     if (err === true) {
         return
+    }
+    if (data.op === 0 || data.op === undefined) {
+        ipcRenderer.send('loading')
+        initTask(data)
+        ipcRenderer.send('load-close')
     }
     if (data.op === 1 || data.op === 4 || data.op === 5) {
         ipcRenderer.send('set-close')
@@ -54,9 +59,20 @@ ws.onmessage = function (evt) {
                 ws.send(JSON.stringify(data))
             }
         })
-        return;
+        return
     }
-    ipcRenderer.send('set-max')
+    if (data.op === 7) {
+        ipcRenderer.send('file-close')
+        return
+    }
+    if (data.op === 8) {
+        ipcRenderer.send('file-min')
+        return
+    }
+    if (data.op === 9) {
+        ipcRenderer.send('file-close')
+        addTask(data.fileList)
+    }
 }
 
 //连接关闭时触发
@@ -111,6 +127,7 @@ function connect(id) {
             myNotification.onclick = () => {
                 myNotification.remove()
             }
+            saveUI()
         }
         if (data.status === 1 || data.status === 2) {
             op.src = './icon/c_pau.png'
@@ -125,6 +142,7 @@ function connect(id) {
                 myNotification.onclick = () => {
                     myNotification.remove()
                 }
+                saveUI()
             }
         }
         state.innerText = taskStatusMap.get(data.status)
@@ -135,6 +153,7 @@ function connect(id) {
         if (state.innerText === 'Downloading' || state.innerText === 'Waiting') {
             state.innerText = 'Errored'
             op.src = './icon/play1.png'
+            saveUI()
         }
     }
     //连接发生错误时触发
@@ -142,8 +161,21 @@ function connect(id) {
         //如果出现连接、处理、接收、发送数据失败的时候触发onerror事件
         if (state.innerText !== 'Success') {
             state.innerText = 'Errored'
+            saveUI()
         }
         console.log(error);
+    }
+}
+
+function initTask(html) {
+    download.innerHTML = html
+    let items = document.getElementsByClassName('item')
+    for (let i = 0; i < items.length; i++) {
+        savePath[items[i].id] = items[i].value
+        let status = document.getElementById(items[i].id + 'filestatus')
+        if (status.innerText !== 'Success' || status.innerText !== 'Errored') {
+            status.innerText = 'Paused'
+        }
     }
 }
 
@@ -152,6 +184,7 @@ function additem(id, name, size) {
     let itemdiv = document.createElement('div')
     itemdiv.className = 'item'
     itemdiv.id = id
+    itemdiv.value = savePath[id]
     download.insertBefore(itemdiv, download.firstChild)
     let itemopdiv = document.createElement('div')
     itemopdiv.style = 'height: 50px;width: 50px;float: left'
@@ -209,6 +242,7 @@ function additem(id, name, size) {
     del.src = 'icon/delete.png'
     itemdiv.appendChild(del)
     countuner()
+    saveUI()
 }
 
 
@@ -256,6 +290,7 @@ function addListener(id) {
                 return
             }
             operate(id, 4)
+            saveUI()
         }
     })
 }
@@ -305,6 +340,7 @@ if (close) {
     close.addEventListener('mouseleave', () => mouseListener(2))
     close.addEventListener('click', () => {
         close.setAttribute('src', './icon/close-pressed.png')
+        saveUI()
         ipcRenderer.send('window-close')
     })
 }
@@ -351,63 +387,26 @@ function addfunc() {
         remote.dialog.showErrorBox('错误', '无效的url')
         return
     }
-    fetch('http://localhost:4800/getFileInfo?url=' + input.value).then(function (res) {
+    ipcRenderer.send('loading')
+    fetch('http://localhost:4800/getFileInfo?url=', {
+        method: 'POST',
+        body: JSON.stringify(input.value)
+    }).then(function (res) {
         input.value = ''
+        ipcRenderer.send('load-close')
         if (res.status !== 200) {
             remote.dialog.showErrorBox('错误', '服务异常')
             return
         }
         res.json().then((data) => {
             if (data !== "" && data.code === 1) {
-                let filename = data.data.filename
-                let length = data.data.length
-                let savepath = data.data.savepath
-                const options = {
-                    title: '保存文件',
-                    defaultPath: savepath + filename,
-                    filters: [
-                        {name: 'All Files', extensions: ['*']}
-                    ]
-                }
-                let path = remote.dialog.showSaveDialogSync(remote.getCurrentWindow(), options)
-                if (path === undefined) {
-                    return
-                }
-                let index = path.lastIndexOf('/')
-                if (index === -1) {
-                    index = path.lastIndexOf('\\')
-                }
-                data.data.savepath = path.slice(0, index + 1)
-                data.data.filename = path.slice(index + 1, path.length)
-                fetch('http://localhost:4800/addTask', {
-                    method: 'POST',
-                    body: JSON.stringify(data.data),
-                    headers: new Headers({
-                        'Content-Type': 'application/json'
-                    })
-                }).then(function (res) {
-                    if (res.status !== 200) {
-                        remote.dialog.showErrorBox('错误', '服务异常')
-                        return
-                    }
-                    res.json().then((data) => {
-                        if (data !== "" && data.code === 1) {
-                            savePath[data.data] = path
-                            additem(data.data, filename, length)
-                            addListener(data.data)
-                            connect(data.data)
-                            return
-                        }
-                        remote.dialog.showErrorBox('错误', data.msg)
-                    })
-                }).catch(function (error) {
-                    remote.dialog.showErrorBox('错误', '请求失败:' + error.message)
-                })
+                ipcRenderer.send('download')
                 return
             }
             remote.dialog.showErrorBox('错误', data.msg)
         })
     }).catch(function (error) {
+        ipcRenderer.send('load-close')
         remote.dialog.showErrorBox('错误', '请求失败:' + error.message)
     })
 }
@@ -457,4 +456,67 @@ function getFileIcon(id, op) {
 }
 
 
+function addTask(fileList) {
+    for (let i = 0; i < fileList.length; i++) {
+        let filename = fileList[i].filename
+        let length = fileList[i].length
+        let savepath = fileList[i].savepath
+        let isexist = fileList[i].isexist
+        if (isexist) {
+            const options = {
+                title: '保存文件',
+                defaultPath: savepath + filename,
+                filters: [
+                    {name: 'All Files', extensions: ['*']}
+                ]
+            }
+            let path = remote.dialog.showSaveDialogSync(remote.getCurrentWindow(), options)
+            if (path === undefined) {
+                continue
+            }
+            let index = path.lastIndexOf('/')
+            if (index === -1) {
+                index = path.lastIndexOf('\\')
+            }
+            fileList[i].savepath = path.slice(0, index + 1)
+            fileList[i].filename = path.slice(index + 1, path.length)
+        }
+        fetch('http://localhost:4800/addTask', {
+            method: 'POST',
+            body: JSON.stringify(fileList[i]),
+            headers: new Headers({
+                'Content-Type': 'application/json'
+            })
+        }).then(function (res) {
+            if (res.status !== 200) {
+                remote.dialog.showErrorBox('错误', '服务异常')
+                return
+            }
+            res.json().then((data) => {
+                if (data !== "" && data.code === 1) {
+                    savePath[data.data] = fileList[i].savepath + fileList[i].filename
+                    additem(data.data, fileList[i].filename, fileList[i].length)
+                    addListener(data.data)
+                    connect(data.data)
+                    return
+                }
+                remote.dialog.showErrorBox('错误', data.msg)
+            })
+        }).catch(function (error) {
+            remote.dialog.showErrorBox('错误', '请求失败:' + error.message)
+        })
+    }
+}
+
+function saveUI() {
+    fetch('http://localhost:4800/saveUI', {
+        method: 'POST',
+        body: JSON.stringify(download.innerHTML),
+        headers: new Headers({
+            'Content-Type': 'application/json'
+        })
+    }).catch(function (error) {
+        console.log(error)
+    })
+}
 

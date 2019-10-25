@@ -1,8 +1,7 @@
-package conf
+package common
 
 import (
 	"database/sql"
-	"downloader/util"
 	_ "github.com/mattn/go-sqlite3"
 	"log"
 	"os"
@@ -25,7 +24,7 @@ const (
 )
 
 func init() {
-	if !util.FileExist("data/downloader.db") {
+	if !FileExist("data/downloader.db") {
 		dbFile, _ := os.OpenFile("data/downloader.db", os.O_CREATE, 0644)
 		_ = dbFile.Close()
 	}

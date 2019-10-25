@@ -2,8 +2,7 @@ package downloader
 
 import (
 	"bytes"
-	"downloader/conf"
-	"downloader/util"
+	"downloader/common"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -64,10 +63,14 @@ type Task struct {
 
 // 任务初始化
 func (task *Task) init() (err error) {
+	if !task.renewal {
+		_ = os.Remove(task.SavePath + task.FileName)
+	}
 	task.file, err = os.OpenFile(task.SavePath+task.FileName, os.O_CREATE|os.O_RDWR|os.O_SYNC, 0644)
 	if err != nil {
 		return fmt.Errorf("打开本地文件错误:%w", err)
 	}
+
 	task.btCancel, task.speedCountChan = make(chan struct{}), make(chan struct{})
 	// 创建控制器
 	task.Event = &TaskEvent{
@@ -88,7 +91,7 @@ func (task *Task) init() (err error) {
 		end:   task.FileLength - 1,
 	})
 	task.DownloadCount = 0
-	if len(task.completed) > 0 {
+	if len(task.completed) > 0 && task.renewal {
 		for _, segment := range task.completed {
 			task.undistributed = task.removeSeg(task.undistributed, segment)
 			task.DownloadCount += Download.SegSize
@@ -113,7 +116,7 @@ func (task *Task) Start() error {
 			task.bts[i] = &bt{
 				id:      i,
 				task:    task,
-				request: util.GetRequest(task.finalLink),
+				request: common.GetRequest(task.finalLink),
 			}
 			go func(bt *bt) {
 				bt.start()
@@ -125,7 +128,7 @@ func (task *Task) Start() error {
 						log.Println(fmt.Sprintf("任务:%s 暂停成功！", task.Id))
 					}
 					if task.Status == Errored {
-						_, _ = conf.TaskUpdate.Exec(conf.ERRORED, task.Id)
+						_, _ = common.TaskUpdate.Exec(common.ERRORED, task.Id)
 						log.Println(fmt.Sprintf("任务:%s 下载失败！", task.Id))
 					}
 					if task.Status == Downloading {
@@ -241,14 +244,17 @@ func (task *Task) writeToDisk(segment *SegMent, buffer *bytes.Buffer) (err error
 		end:    segment.finish,
 		finish: segment.finish,
 	}
-	if segment.finish != segment.end && task.renewal {
+	if segment.finish != segment.end && task.renewal && segment.end > 0 {
 		segment.start = segment.finish + 1
 		task.segErr(segment)
 	}
 	task.file.Sync()
+	if !task.renewal {
+		return
+	}
 	task.completedLock.Lock()
 	task.completed = append(task.completed, seg)
-	_, _ = conf.SegInsert.Exec(task.Id, seg.start, seg.end, seg.finish)
+	_, _ = common.SegInsert.Exec(task.Id, seg.start, seg.end, seg.finish)
 	task.completedLock.Unlock()
 	return
 }
@@ -274,8 +280,8 @@ func (task *Task) removeSeg(seg []*SegMent, segment *SegMent) []*SegMent {
 				end:   segIn.end,
 			}
 			segIn.end = segment.start - 1
-			real := append([]*SegMent{}, seg[index+1:]...)
-			return append(append(seg[:index+1], segInsert), real...)
+			reals := append([]*SegMent{}, seg[index+1:]...)
+			return append(append(seg[:index+1], segInsert), reals...)
 		}
 	}
 	return seg

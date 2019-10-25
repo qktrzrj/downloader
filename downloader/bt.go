@@ -57,7 +57,9 @@ func (bt *bt) start() {
 }
 
 func (bt *bt) downSeg(segment *SegMent, timer *time.Timer) (err error) {
-	bt.request.Header.Set("Range", fmt.Sprintf("bytes=%d-%d", segment.start, segment.end))
+	if segment.end > 0 && bt.task.renewal {
+		bt.request.Header.Set("Range", fmt.Sprintf("bytes=%d-%d", segment.start, segment.end))
+	}
 	response, err := bt.task.client.Do(bt.request)
 	if err != nil {
 		return
