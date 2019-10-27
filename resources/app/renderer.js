@@ -50,12 +50,16 @@ ws.onmessage = function (evt) {
         return
     }
     if (data.op === 6) {
-        remote.dialog.showOpenDialogSync(remote.getCurrentWindow(), {
+        remote.dialog.showOpenDialog({
             defaultPath: data.savePath,
             properties: ['openDirectory']
         }).then(function (res) {
             if (!res.canceled) {
-                data.savePath = res.filePaths[0]
+                if (res.filePaths[0].lastIndexOf('/') !== -1) {
+                    data.savePath = res.filePaths[0] + '/'
+                } else {
+                    data.savePath = res.filePaths[0] + '\\'
+                }
                 ws.send(JSON.stringify(data))
             }
         })
@@ -121,8 +125,9 @@ function connect(id) {
             state.hidden = true
             state.setAttribute('hidden', true)
             let filename = document.getElementById(id + 'filename')
+            socket[id].close()
             let myNotification = new Notification('下载完成', {
-                body: '文件' + filename + '下载完成！'
+                body: '文件' + filename.innerText + '下载完成！'
             })
             myNotification.onclick = () => {
                 myNotification.remove()
@@ -134,10 +139,11 @@ function connect(id) {
         }
         if (data.status === 4 || data.status === 5) {
             op.src = './icon/play1.png'
+            socket[id].close()
             if (data.status === 5 && state.innerText !== 'Errored') {
                 let filename = document.getElementById(id + 'filename')
                 let myNotification = new Notification('下载失败', {
-                    body: '文件' + filename + '下载失败！'
+                    body: '文件' + filename.innerText + '下载失败！'
                 })
                 myNotification.onclick = () => {
                     myNotification.remove()
@@ -150,11 +156,11 @@ function connect(id) {
     //连接关闭时触发
     socket[id].onclose = function (evt) {
         delete socket[id]
-        if (state.innerText === 'Downloading' || state.innerText === 'Waiting') {
-            state.innerText = 'Errored'
-            op.src = './icon/play1.png'
-            saveUI()
-        }
+        // if (state.innerText === 'Downloading' || state.innerText === 'Waiting') {
+        //     state.innerText = 'Errored'
+        //     op.src = './icon/play1.png'
+        //     saveUI()
+        // }
     }
     //连接发生错误时触发
     socket[id].onerror = function (evt) {
@@ -173,9 +179,15 @@ function initTask(html) {
     for (let i = 0; i < items.length; i++) {
         savePath[items[i].id] = items[i].value
         let status = document.getElementById(items[i].id + 'filestatus')
-        if (status.innerText !== 'Success' || status.innerText !== 'Errored') {
-            status.innerText = 'Paused'
+        let op = document.getElementById(items[i].id + 'item-op')
+        if (status.innerText !== 'Success') {
+            connect(items[i].id)
+            op.src = './icon/play1.png'
+            if (status.innerText !== 'Errored') {
+                status.innerText = 'Paused'
+            }
         }
+        addListener(items[i].id)
     }
 }
 
@@ -259,9 +271,10 @@ function addListener(id) {
         }
         if (state.innerText !== 'Success') {
             operate(id, 2)
+            connect(id)
             return
         }
-        remote.dialog.showOpenDialog(remote.getCurrentWindow(), {defaultPath: savePath[id], properties: ['openFile']})
+        remote.dialog.showOpenDialog({defaultPath: savePath[id], properties: ['openFile']})
     })
 
     itemex.addEventListener('mouseover', () => {
@@ -470,7 +483,7 @@ function addTask(fileList) {
                     {name: 'All Files', extensions: ['*']}
                 ]
             }
-            let path = remote.dialog.showSaveDialogSync(remote.getCurrentWindow(), options)
+            let path = remote.dialog.showSaveDialogSync(options)
             if (path === undefined) {
                 continue
             }

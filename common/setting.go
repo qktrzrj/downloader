@@ -1,6 +1,7 @@
 package common
 
 import (
+	"fmt"
 	"github.com/go-ini/ini"
 	"log"
 	"os/user"
@@ -50,7 +51,8 @@ func SetValue(path string, routineNum int, maxTaskNum int) {
 	sec.Key("SAVE_PATH").SetValue(path)
 	sec.Key("ROUTINE_NUM").SetValue(strconv.Itoa(routineNum))
 	sec.Key("MAX_TASK_NUM").SetValue(strconv.Itoa(maxTaskNum))
-	_ = Cfg.SaveTo("data/app.ini")
+	err = Cfg.SaveTo("conf/app.ini")
+	fmt.Println(err)
 	AllPath = path
 	RoutineNum = routineNum
 }

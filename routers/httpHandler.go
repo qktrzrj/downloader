@@ -2,7 +2,7 @@ package routers
 
 import (
 	"downloader/common"
-	"downloader/downloader"
+	"downloader/download"
 	"fmt"
 	"github.com/gin-gonic/gin"
 	"net/http"
@@ -38,7 +38,7 @@ func addTask(c *gin.Context) {
 		result.Msg = fmt.Sprint(err)
 		return
 	}
-	id, err := downloader.Download.AddTask(fileInfo, common.NewClient())
+	id, err := download.Download.AddTask(fileInfo, common.NewClient())
 	if err != nil {
 		result.Code = -1
 		result.Msg = fmt.Sprint(err)
@@ -51,14 +51,14 @@ func addTask(c *gin.Context) {
 func operate(c *gin.Context) {
 	result := common.NewResult()
 	defer c.JSON(http.StatusOK, result)
-	var event downloader.DownloadEvent
+	var event download.DownloadEvent
 	err := c.BindJSON(&event)
 	if err != nil {
 		result.Code = -1
 		result.Msg = fmt.Sprint(err)
 		return
 	}
-	downloader.Download.Event <- event
+	download.Download.Event <- event
 }
 
 // UI快照

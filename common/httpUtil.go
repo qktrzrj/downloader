@@ -35,13 +35,25 @@ func NewClient() *http.Client {
 
 // 重定向获取最终链接
 func redirect(url string, client *http.Client) string {
+	finalLink := ""
+	req := GetRequest(url)
 	for {
-		resp, err := client.Head(url)
+		resp, err := client.Do(req)
 		if err != nil {
 			return url
 		}
-		if resp.StatusCode == 302 {
-			url = resp.Header.Get("Referrer")
+		defer resp.Body.Close()
+		//if resp.StatusCode != 302 {
+		//	return url
+		//}
+		finalLink = resp.Header.Get("Referrer")
+		if finalLink == "" {
+			finalLink = resp.Header.Get("referrer")
+		}
+		if finalLink != "" {
+			url = finalLink
+			_ = req.Body.Close()
+			req = GetRequest(url)
 			continue
 		}
 		return url
@@ -50,7 +62,8 @@ func redirect(url string, client *http.Client) string {
 
 // 请求目标文件任务信息
 func GetFileInfo(finalLink string, client *http.Client) (fileInfo FileInfo, err error) {
-	resp, err := client.Head(finalLink)
+	req := GetRequest(finalLink)
+	resp, err := client.Do(req)
 	if err != nil {
 		return fileInfo, fmt.Errorf("请求目标文件信息失败: %w", err)
 	}
@@ -68,6 +81,9 @@ func GetFileInfo(finalLink string, client *http.Client) (fileInfo FileInfo, err 
 	fileInfo.FinalLink = finalLink
 	// 判断是否支持断点续传
 	if temp := resp.Header.Get("Accept-Ranges"); len(temp) != 0 {
+		fileInfo.Renewal = true
+	}
+	if temp := resp.Header.Get("accept-ranges"); len(temp) != 0 {
 		fileInfo.Renewal = true
 	}
 	// 获取文件长度
@@ -90,6 +106,9 @@ func GetRequest(url string) *http.Request {
 
 func getFileName_TypeInUrl(finalLink string, response *http.Response) (fileName string, fileType string) {
 	disposition := response.Header.Get("Content-Disposition")
+	if disposition == "" {
+		disposition = response.Header.Get("content-disposition")
+	}
 	if disposition != "" {
 		disps := strings.Split(disposition, ";")
 		for _, value := range disps {
@@ -109,10 +128,17 @@ func getFileName_TypeInUrl(finalLink string, response *http.Response) (fileName 
 			fileName = string(u[s:])
 		} else {
 			fileName = string(u[s+1:])
+			l := strings.LastIndex(fileName, "?")
+			if l != -1 {
+				fileName = fileName[:l]
+			}
 		}
 	}
 
 	fileType = Http_Cotent_Type[response.Header.Get("Content-Type")]
+	if fileType == "" {
+		fileType = Http_Cotent_Type[response.Header.Get("content-type")]
+	}
 	if fileType == "" && strings.LastIndex(fileName, ".") != -1 {
 		fileType = fileName[strings.LastIndex(fileName, ".")+1:]
 	}

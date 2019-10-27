@@ -1,4 +1,4 @@
-package downloader
+package download
 
 import (
 	"bytes"
@@ -113,11 +113,13 @@ func (task *Task) Start() error {
 		}
 		go task.speedCalculate()
 		for i := 0; i < Download.MaxRoutineNum; i++ {
+			task.btLock.Lock()
 			task.bts[i] = &bt{
 				id:      i,
 				task:    task,
 				request: common.GetRequest(task.finalLink),
 			}
+			task.btLock.Unlock()
 			go func(bt *bt) {
 				bt.start()
 				task.btLock.Lock()

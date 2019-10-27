@@ -1,4 +1,4 @@
-package downloader
+package download
 
 import (
 	"downloader/common"
@@ -66,14 +66,14 @@ func (d *Downloader) Init() {
 	if err == nil {
 		for taskrow.Next() {
 			task := &Task{client: common.NewClient()}
-			_ = taskrow.Scan(task.Id, task.renewal, task.Status, task.FileLength, task.finalLink, task.FileName, task.SavePath)
+			_ = taskrow.Scan(&task.Id, &task.renewal, &task.Status, &task.FileLength, &task.finalLink, &task.FileName, &task.SavePath)
 			quit := make(chan struct{})
 			go func(id string) {
 				segrow, err := common.DB.Query("select * from segment where task_id =?", id)
 				if err == nil {
 					for segrow.Next() {
 						segment := &SegMent{}
-						_ = segrow.Scan(id, segment.start, segment.end, segment.finish)
+						_ = segrow.Scan(id, &segment.start, &segment.end, &segment.finish)
 						task.completedLock.Lock()
 						task.completed = append(task.completed, segment)
 						task.completedLock.Unlock()
@@ -147,10 +147,17 @@ func (d *Downloader) PauseTask(id string) {
 	task, ok := Download.ActiveTaskMap[id]
 	if !ok {
 	}
+	if i, ok := d.TaskQueue.Contains(id); ok {
+		d.TaskQueue.RemoveItem(i)
+	}
 	if len(task.bts) != 0 {
 		close(task.btCancel)
 	}
 	task.Status = Paused
+	Download.Event <- DownloadEvent{
+		TaskId: "",
+		Enum:   Schedule,
+	}
 }
 
 // 继续任务
@@ -161,9 +168,10 @@ func (d *Downloader) ResumeTask(id string) {
 	}
 	Download.TaskQueue.Enqueue(task.Id)
 	Download.Event <- DownloadEvent{
-		TaskId: task.Id,
+		TaskId: "",
 		Enum:   Schedule,
 	}
+	task.Status = Waiting
 	_, _ = common.TaskUpdate.Exec(common.INCOMPLETE, task.Id)
 }
 

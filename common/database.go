@@ -4,7 +4,6 @@ import (
 	"database/sql"
 	_ "github.com/mattn/go-sqlite3"
 	"log"
-	"os"
 )
 
 var (
@@ -24,10 +23,10 @@ const (
 )
 
 func init() {
-	if !FileExist("data/downloader.db") {
-		dbFile, _ := os.OpenFile("data/downloader.db", os.O_CREATE, 0644)
-		_ = dbFile.Close()
-	}
+	//if !FileExist("data/downloader.db") {
+	//	dbFile, _ := os.OpenFile("data/downloader.db", os.O_CREATE, 0644)
+	//	_ = dbFile.Close()
+	//}
 	DB, err := sql.Open("sqlite3", "data/downloader.db")
 	if err != nil {
 		log.Fatalln("数据库启动失败")

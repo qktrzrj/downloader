@@ -10,6 +10,37 @@ let loading
 let tray
 let ipcMain = require('electron').ipcMain
 
+const exec = require('child_process').exec
+
+// 任何你期望执行的cmd命令，ls都可以
+let cmdStr = './downloader'
+// 执行cmd命令的目录，如果使用cd xx && 上面的命令，这种将会无法正常退出子进程
+let cmdPath = '/Users/yan/GolandProjects/downloader/'
+// 子进程名称
+let workerProcess
+
+function runExec() {
+    // 执行命令行，如果命令不需要路径，或就是项目根目录，则不需要cwd参数：
+    workerProcess = exec(cmdStr, {cwd: cmdPath})
+    // 不受child_process默认的缓冲区大小的使用方法，没参数也要写上{}：workerProcess = exec(cmdStr, {})
+
+    // 打印正常的后台可执行程序输出
+    workerProcess.stdout.on('data', function (data) {
+        console.log('stdout: ' + data);
+    });
+
+    // 打印错误的后台可执行程序输出
+    workerProcess.stderr.on('data', function (data) {
+        console.log('stderr: ' + data);
+    });
+
+    // 退出之后的输出
+    workerProcess.on('close', function (code) {
+        console.log('out code：' + code);
+        app.quit()
+    })
+}
+
 // 限制只可以打开一个应用, 4.x的文档
 const gotTheLock = app.requestSingleInstanceLock()
 if (!gotTheLock) {
@@ -26,6 +57,7 @@ if (!gotTheLock) {
 }
 
 function createWindow() {
+    //runExec()
     // Create the browser window.
     mainWindow = new BrowserWindow({
         width: 800,
@@ -138,7 +170,7 @@ ipcMain.on('download', function () {
 ipcMain.on('loading', function () {
     loading = new BrowserWindow({
         parent: mainWindow, modal: true, show: false, frame: false, width: 400, height: 400,
-        resizable: false,transparent: true
+        resizable: false, transparent: true
     })
     loading.loadFile('./loading.html')
     loading.once('ready-to-show', () => {

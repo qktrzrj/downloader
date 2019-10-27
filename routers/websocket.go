@@ -2,7 +2,7 @@ package routers
 
 import (
 	"downloader/common"
-	"downloader/downloader"
+	"downloader/download"
 	"github.com/gin-gonic/gin"
 	"github.com/gorilla/websocket"
 	"io/ioutil"
@@ -31,7 +31,7 @@ func mainUI(c *gin.Context) {
 	Conn = conn
 	Conn.SetCloseHandler(func(code int, text string) error {
 		_ = common.DB.Close()
-		downloader.Download.BeforeExit()
+		download.Download.BeforeExit()
 		time.Sleep(time.Second)
 		log.Fatal("主动断开链接")
 		return nil
@@ -51,7 +51,7 @@ func mainUI(c *gin.Context) {
 			continue
 		}
 		if exit(err) {
-			downloader.Download.BeforeExit()
+			download.Download.BeforeExit()
 			time.Sleep(time.Second)
 			log.Fatal("断开链接")
 		}
@@ -66,15 +66,15 @@ func setting(c *gin.Context) {
 		return
 	}
 	SetConn = conn
-	_ = conn.WriteJSON(downloader.Download)
+	_ = conn.WriteJSON(download.Download)
 	var operate operation
 	for {
 		err := conn.ReadJSON(&operate)
 		if err == nil {
 			_ = Conn.WriteJSON(operate)
 			if operate.Op == 5 {
-				downloader.Download.SavePath = operate.SavePath
-				downloader.Download.MaxRoutineNum = operate.MaxRoutineNum
+				download.Download.SavePath = operate.SavePath
+				download.Download.MaxRoutineNum = operate.MaxRoutineNum
 				common.SetValue(operate.SavePath, operate.MaxRoutineNum, 3)
 			}
 			continue
@@ -115,7 +115,7 @@ func taskInfo(c *gin.Context) {
 		http.NotFound(c.Writer, c.Request)
 		return
 	}
-	task, ok := downloader.Download.ActiveTaskMap[c.Query("id")]
+	task, ok := download.Download.ActiveTaskMap[c.Query("id")]
 	if !ok {
 		_ = conn.Close()
 		return

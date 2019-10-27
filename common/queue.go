@@ -51,3 +51,18 @@ func (q *ItemQueue) IsEmpty() bool {
 func (q *ItemQueue) Size() int {
 	return len(q.items)
 }
+
+func (q *ItemQueue) Contains(t Item) (int, bool) {
+	for i := len(q.items); i >= 0; i-- {
+		if q.items[i] == t {
+			return i, true
+		}
+	}
+	return 0, false
+}
+
+func (q *ItemQueue) RemoveItem(i int) {
+	q.lock.Lock()
+	q.items = append(append([]Item{}, q.items[:i]...), q.items[i+1:]...)
+	q.lock.Unlock()
+}

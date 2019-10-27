@@ -1,4 +1,4 @@
-package downloader
+package download
 
 import (
 	"bytes"
@@ -70,6 +70,10 @@ func (bt *bt) downSeg(segment *SegMent, timer *time.Timer) (err error) {
 	}
 	reader := response.Body
 	buf := bt.task.BufferPool.Get().(*bytes.Buffer)
+	defer func() {
+		buf.Reset()
+		bt.task.BufferPool.Put(buf)
+	}()
 	stream := make([]byte, 1024)
 	buffLeft := 0
 	for {
@@ -97,28 +101,26 @@ func (bt *bt) downSeg(segment *SegMent, timer *time.Timer) (err error) {
 			if bufLen > 0 {
 				err = bt.task.writeToDisk(segment, buf)
 			}
-			buf.Reset()
 			return
 		}
 		if l <= 0 {
 			if buf.Len() > 0 {
 				writeErr := bt.task.writeToDisk(segment, buf)
-				buf.Reset() // 重置缓冲区
 				if writeErr != nil {
 					err = writeErr
 				}
 			}
-			break
+			return
 		}
 		buf.Write(bin[:l])
 		atomic.AddInt64(&bt.task.DownloadCount, int64(l))
 		if buf.Len() == buf.Cap() || err == io.EOF { // 缓存满了, 或者流尾, 写入磁盘
 			writeErr := bt.task.writeToDisk(segment, buf)
-			buf.Reset() // 重置缓冲区
 			if writeErr != nil {
 				err = writeErr
 				break
 			}
+			buf.Reset() // 重置缓冲区
 		}
 		if err == io.EOF {
 			err = nil
