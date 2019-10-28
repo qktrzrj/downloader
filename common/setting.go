@@ -15,6 +15,8 @@ var (
 	AllPath    string
 	RoutineNum int
 	MaxTaskNum int32
+	BufferSize int64
+	SegSize    int64
 )
 
 var SavePath = map[string]string{
@@ -40,6 +42,8 @@ func init() {
 	AllPath = sec.Key("SAVE_PATH").MustString(defaultSavePath())
 	RoutineNum = sec.Key("ROUTINE_NUM").MustInt(20)
 	MaxTaskNum = int32(sec.Key("MAX_TASK_NUM").MustInt(3))
+	BufferSize = sec.Key("BUFFER_SIZE").MustInt64(100) * 1024
+	SegSize = sec.Key("SEG_SIZE").MustInt64(1024) * 1024
 }
 
 func SetValue(path string, routineNum int, maxTaskNum int) {

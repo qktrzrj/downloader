@@ -18,7 +18,7 @@ func main() {
 	common.DB, _ = sql.Open("sqlite3", "data/downloader.db")
 	download.Download = download.Downloader{
 		MaxRoutineNum:    common.RoutineNum,
-		SegSize:          500 * 1024,
+		SegSize:          common.SegSize,
 		SavePath:         common.AllPath,
 		MaxActiveTaskNum: common.MaxTaskNum,
 	}
