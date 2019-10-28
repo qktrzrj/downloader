@@ -9,10 +9,19 @@
   "version": "1.0.0",
   "author": "yan",
   "scripts": {
-    "start": "electron ."
+    "package": "electron-packager . downloader --platform=win32 --out Downloader --arch=x64 --electron-version=7.0.0 --overwrite --ignore=node_modules --ignore=.gitignore"
   },
-  "dependencies": {},
+  "dependencies": {
+    "electron-squirrel-startup": "^1.0.0"
+  },
   "devDependencies": {
-    "electron": "7.0.0"
+    "electron": "7.0.0",
+    "electron-winstaller": "^4.0.0"
+  },
+  "build": {
+    "appId": "online.yinyan.www",
+    "win": {
+      "icon": "./icon/app.ico"
+    }
   }
 }

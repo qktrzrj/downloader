@@ -4,6 +4,8 @@ import (
 	"fmt"
 	browser "github.com/EDDYCJY/fake-useragent"
 	"net/http"
+	"net/url"
+	"path"
 	"strings"
 )
 
@@ -121,18 +123,20 @@ func getFileName_TypeInUrl(finalLink string, response *http.Response) (fileName 
 		}
 	}
 	if fileName == "" {
-		u := []byte(finalLink)
-		s := strings.LastIndex(finalLink, "/")
-		if s == -1 {
-			s = 0
-			fileName = string(u[s:])
-		} else {
-			fileName = string(u[s+1:])
-			l := strings.LastIndex(fileName, "?")
-			if l != -1 {
-				fileName = fileName[:l]
-			}
-		}
+		uri, _ := url.ParseRequestURI(finalLink)
+		fileName = path.Base(uri.Path)
+		//u := []byte(finalLink)
+		//s := strings.LastIndex(finalLink, "/")
+		//if s == -1 {
+		//	s = 0
+		//	fileName = string(u[s:])
+		//} else {
+		//	fileName = string(u[s+1:])
+		//	l := strings.LastIndex(fileName, "?")
+		//	if l != -1 {
+		//		fileName = fileName[:l]
+		//	}
+		//}
 	}
 
 	fileType = Http_Cotent_Type[response.Header.Get("Content-Type")]

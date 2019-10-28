@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	_ "github.com/mattn/go-sqlite3"
 	"log"
+	"sync"
 )
 
 var (
@@ -13,6 +14,8 @@ var (
 	TaskDelete *sql.Stmt
 	SegInsert  *sql.Stmt
 	SegDelete  *sql.Stmt
+	UIInsert   *sql.Stmt
+	DBLock     sync.Mutex
 )
 
 // task status : 0-未完成,1-完成,2-出错
@@ -23,10 +26,6 @@ const (
 )
 
 func init() {
-	//if !FileExist("data/downloader.db") {
-	//	dbFile, _ := os.OpenFile("data/downloader.db", os.O_CREATE, 0644)
-	//	_ = dbFile.Close()
-	//}
 	DB, err := sql.Open("sqlite3", "data/downloader.db")
 	if err != nil {
 		log.Fatalln("数据库启动失败")
@@ -51,6 +50,10 @@ func init() {
 			start int,
 			end int,
 			finish int
+		);
+		create table if not exists ui
+		(
+			content text
 		);`
 
 	_, _ = DB.Exec(sql_table)
@@ -72,6 +75,10 @@ func init() {
 		log.Fatalln("片段插入准备失败!")
 	}
 	SegDelete, err = DB.Prepare(`delete from segment where task_id=?`)
+	if err != nil {
+		log.Fatalln("片段删除准备失败!")
+	}
+	UIInsert, err = DB.Prepare(`insert into ui(content) values (?) `)
 	if err != nil {
 		log.Fatalln("片段删除准备失败!")
 	}

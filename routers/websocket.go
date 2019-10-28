@@ -5,11 +5,9 @@ import (
 	"downloader/download"
 	"github.com/gin-gonic/gin"
 	"github.com/gorilla/websocket"
-	"io/ioutil"
 	"log"
 	"net"
 	"net/http"
-	"os"
 	"time"
 )
 
@@ -30,17 +28,22 @@ func mainUI(c *gin.Context) {
 	}
 	Conn = conn
 	Conn.SetCloseHandler(func(code int, text string) error {
+		common.DBLock.Lock()
 		_ = common.DB.Close()
+		common.DBLock.Unlock()
 		download.Download.BeforeExit()
 		time.Sleep(time.Second)
 		log.Fatal("主动断开链接")
 		return nil
 	})
-	file, err := os.OpenFile("data/UI.txt", os.O_RDONLY, 0644)
+	var html string
+	row, err := common.DB.Query("select * from ui")
 	if err == nil {
-		content, err := ioutil.ReadAll(file)
+		if row.Next() {
+			err = row.Scan(&html)
+		}
 		if err == nil {
-			_ = Conn.WriteJSON(string(content))
+			_ = Conn.WriteJSON(html)
 		}
 	}
 	var operate operation

@@ -13,3 +13,8 @@ func FileExist(path string) bool {
 	}
 	return false
 }
+
+func GetFileSize(path string) int64 {
+	info, _ := os.Stat(path)
+	return info.Size()
+}

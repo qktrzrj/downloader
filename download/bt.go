@@ -1,6 +1,7 @@
 package download
 
 import (
+	"bufio"
 	"bytes"
 	"errors"
 	"fmt"
@@ -8,7 +9,6 @@ import (
 	"log"
 	"net/http"
 	"strings"
-	"sync/atomic"
 	"time"
 )
 
@@ -41,6 +41,8 @@ func (bt *bt) start() {
 			if segment == nil {
 				return
 			}
+			log.Println(fmt.Sprintf("task %s, worker %d segment start %d end %d start",
+				bt.task.Id, bt.id, segment.start, segment.end))
 			err := bt.downSeg(segment, nil)
 			if err != nil {
 				if segment.finish != segment.start {
@@ -68,7 +70,7 @@ func (bt *bt) downSeg(segment *SegMent, timer *time.Timer) (err error) {
 	if response.StatusCode != http.StatusOK && response.StatusCode != http.StatusPartialContent {
 		return errors.New("下载错误")
 	}
-	reader := response.Body
+	reader := bufio.NewReaderSize(response.Body, 1024)
 	buf := bt.task.BufferPool.Get().(*bytes.Buffer)
 	defer func() {
 		buf.Reset()
@@ -104,16 +106,16 @@ func (bt *bt) downSeg(segment *SegMent, timer *time.Timer) (err error) {
 			return
 		}
 		if l <= 0 {
-			if buf.Len() > 0 {
-				writeErr := bt.task.writeToDisk(segment, buf)
-				if writeErr != nil {
-					err = writeErr
-				}
-			}
+			//if buf.Len() > 0 {
+			//	writeErr := bt.task.writeToDisk(segment, buf)
+			//	if writeErr != nil {
+			//		err = writeErr
+			//	}
+			//}
 			return
 		}
 		buf.Write(bin[:l])
-		atomic.AddInt64(&bt.task.DownloadCount, int64(l))
+		//atomic.AddInt64(&bt.task.DownloadCount, int64(l))
 		if buf.Len() == buf.Cap() || err == io.EOF { // 缓存满了, 或者流尾, 写入磁盘
 			writeErr := bt.task.writeToDisk(segment, buf)
 			if writeErr != nil {

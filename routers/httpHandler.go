@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"github.com/gin-gonic/gin"
 	"net/http"
-	"os"
 	"sync"
 )
 
@@ -68,13 +67,11 @@ func saveUI(c *gin.Context) {
 	var html string
 	err := c.BindJSON(&html)
 	if err == nil {
-		fileLock.Lock()
-		_ = os.Remove("data/UI.txt")
-		// 创建文件
-		file, err := os.OpenFile("data/UI.txt", os.O_CREATE|os.O_WRONLY, 0644)
-		if err == nil {
-			_, _ = file.WriteString(html)
-		}
-		fileLock.Unlock()
+		common.DBLock.Lock()
+		_, err = common.DB.Exec("delete from ui")
+		common.DBLock.Unlock()
+		common.DBLock.Lock()
+		_, err = common.UIInsert.Exec(html)
+		common.DBLock.Unlock()
 	}
 }

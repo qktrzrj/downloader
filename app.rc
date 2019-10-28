@@ -1,0 +1,31 @@
+#define RT_MANIFEST 24
+
+#define MAKEVER_S(a,b,c,d) a,b,c,d
+#define MAKEVER(a,b,c,d,e) a.b.c.d.e
+#define STRINGIFY(x) #x
+#define TOSTRING(x) STRINGIFY(x)
+
+1 VERSIONINFO
+
+BEGIN
+    BLOCK "StringFileInfo"
+    BEGIN
+        BLOCK "040904B0"
+        BEGIN
+			VALUE "CompanyName", "www.yinyan.onlile/downaloder"
+			VALUE "FileDescription", "downloader"
+			VALUE "FileVersion", TOSTRING(MAKEVER(VER_MAJOR, VER_MINOR, VER_PATCH, VER_REVISION, VER_REVISION_HASH))
+			VALUE "InternalName", "yunyan"
+			VALUE "LegalCopyright", "Copyright (C) 2018. yunyan. All Rights Reserved."
+			VALUE "OriginalFilename", "downloader.exe"
+			VALUE "ProductName", "downloader"
+			VALUE "ProductVersion", TOSTRING(MAKEVER(VER_MAJOR, VER_MINOR, VER_PATCH, VER_REVISION, VER_REVISION_HASH))
+        END
+    END
+    BLOCK "VarFileInfo"
+    BEGIN
+            VALUE "Translation", 0x0409, 0x04B0
+    END
+END
+
+IDI_ICON1 ICON "./resources/app/icon/app_256.ico"

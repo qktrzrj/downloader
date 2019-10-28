@@ -1,9 +1,9 @@
 package download
 
 import (
+	"bufio"
 	"bytes"
 	"downloader/common"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"github.com/gorilla/websocket"
@@ -13,6 +13,7 @@ import (
 	"net/http"
 	"os"
 	"sync"
+	"sync/atomic"
 	"time"
 )
 
@@ -49,7 +50,7 @@ type Task struct {
 	undistributedLock sync.Mutex
 	completed         []*SegMent
 	completedLock     sync.Mutex
-	btNum             int32
+	btControl         int32
 	bts               map[int]*bt
 	btCancel          chan struct{}
 	btLock            sync.Mutex
@@ -69,6 +70,10 @@ func (task *Task) init() (err error) {
 	task.file, err = os.OpenFile(task.SavePath+task.FileName, os.O_CREATE|os.O_RDWR|os.O_SYNC, 0644)
 	if err != nil {
 		return fmt.Errorf("打开本地文件错误:%w", err)
+	}
+
+	if task.file == nil {
+		return errors.New("打开本地文件错误:文件不存在")
 	}
 
 	task.btCancel, task.speedCountChan = make(chan struct{}), make(chan struct{})
@@ -105,32 +110,44 @@ func (task *Task) Start() error {
 		return errors.New("当前状态无法下载！")
 	}
 	task.Status = Downloading
+	//task.btControl = false
+	err := task.init()
+	if err != nil {
+		task.Status = Errored
+		return err
+	}
+	go task.speedCalculate()
 	go func() {
-		err := task.init()
-		if err != nil {
-			task.Status = Errored
-			return
+		routine := Download.MaxRoutineNum
+		if task.FileLength <= 0 {
+			routine = 1
+		} else {
+			size := int(task.FileLength / Download.SegSize)
+			if size < routine {
+				routine = size
+			}
 		}
-		go task.speedCalculate()
-		for i := 0; i < Download.MaxRoutineNum; i++ {
-			task.btLock.Lock()
+		task.btControl = int32(routine)
+		for i := 0; i < routine; i++ {
+			//task.btLock.Lock()
 			task.bts[i] = &bt{
 				id:      i,
 				task:    task,
 				request: common.GetRequest(task.finalLink),
 			}
-			task.btLock.Unlock()
 			go func(bt *bt) {
 				bt.start()
-				task.btLock.Lock()
-				delete(task.bts, bt.id)
+				//task.btLock.Lock()
 				log.Println(fmt.Sprintf("task %s, worker %d exit", task.Id, bt.id))
-				if len(task.bts) == 0 {
+				if atomic.AddInt32(&task.btControl, -1) == 0 {
+					task.bts = nil
 					if task.Status == Paused {
 						log.Println(fmt.Sprintf("任务:%s 暂停成功！", task.Id))
 					}
 					if task.Status == Errored {
+						common.DBLock.Lock()
 						_, _ = common.TaskUpdate.Exec(common.ERRORED, task.Id)
+						common.DBLock.Unlock()
 						log.Println(fmt.Sprintf("任务:%s 下载失败！", task.Id))
 					}
 					if task.Status == Downloading {
@@ -144,8 +161,9 @@ func (task *Task) Start() error {
 					time.Sleep(time.Second)
 					go task.Exit()
 				}
-				task.btLock.Unlock()
+				//task.btLock.Unlock()
 			}(task.bts[i])
+			//task.btLock.Unlock()
 		}
 	}()
 	return nil
@@ -166,6 +184,7 @@ func (task *Task) Exit() {
 // 计算下载速度
 func (task *Task) speedCalculate() {
 	t := time.Tick(time.Second)
+	path := task.SavePath + task.FileName
 	for {
 		preDownCount := task.DownloadCount
 		select {
@@ -173,6 +192,7 @@ func (task *Task) speedCalculate() {
 			task.SpeedCount = 0
 			return
 		case <-t:
+			task.DownloadCount = common.GetFileSize(path)
 			task.SpeedCount, _ = decimal.NewFromFloat(float64(task.DownloadCount) - float64(preDownCount)).Div(
 				decimal.NewFromFloat(1024)).Float64()
 			if decimal.NewFromFloat(task.SpeedCount).GreaterThan(decimal.NewFromFloat(0)) {
@@ -180,12 +200,7 @@ func (task *Task) speedCalculate() {
 					decimal.NewFromFloat(1024))).Div(decimal.NewFromFloat(task.SpeedCount)).Float64()
 			}
 			if task.Conn != nil {
-				marshal, err := json.Marshal(task)
-				if err == nil {
-					_ = task.Conn.WriteMessage(websocket.TextMessage, marshal)
-				} else {
-					fmt.Println(err)
-				}
+				_ = task.Conn.WriteJSON(task)
 			}
 		}
 	}
@@ -233,10 +248,12 @@ func (task *Task) writeToDisk(segment *SegMent, buffer *bytes.Buffer) (err error
 	if err != nil {
 		return err
 	}
+	writer := bufio.NewWriter(task.file)
 	//if seek != segment.start {
 	//	return errors.New("文件操作失败")
 	//}
-	l, err := buffer.WriteTo(task.file)
+	//l, err := writer.Write(buffer.Bytes())
+	l, err := buffer.WriteTo(writer)
 	if err != nil {
 		return
 	}
@@ -256,7 +273,9 @@ func (task *Task) writeToDisk(segment *SegMent, buffer *bytes.Buffer) (err error
 	}
 	task.completedLock.Lock()
 	task.completed = append(task.completed, seg)
+	common.DBLock.Lock()
 	_, _ = common.SegInsert.Exec(task.Id, seg.start, seg.end, seg.finish)
+	common.DBLock.Unlock()
 	task.completedLock.Unlock()
 	return
 }

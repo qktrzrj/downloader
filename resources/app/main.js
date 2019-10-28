@@ -13,15 +13,15 @@ let ipcMain = require('electron').ipcMain
 const exec = require('child_process').exec
 
 // 任何你期望执行的cmd命令，ls都可以
-let cmdStr = './downloader'
+let cmdStr = 'dl.exe'
 // 执行cmd命令的目录，如果使用cd xx && 上面的命令，这种将会无法正常退出子进程
-let cmdPath = '/Users/yan/GolandProjects/downloader/'
+let cmdPath = ''
 // 子进程名称
 let workerProcess
 
 function runExec() {
     // 执行命令行，如果命令不需要路径，或就是项目根目录，则不需要cwd参数：
-    workerProcess = exec(cmdStr, {cwd: cmdPath})
+    workerProcess = exec(cmdStr)//, {cwd: cmdPath})
     // 不受child_process默认的缓冲区大小的使用方法，没参数也要写上{}：workerProcess = exec(cmdStr, {})
 
     // 打印正常的后台可执行程序输出
@@ -63,7 +63,7 @@ function createWindow() {
         width: 800,
         height: 600,
         frame: false,
-        icon: './icon/app.png',
+        icon: './resources/app/icon/icon.png',
         webPreferences: {
             nodeIntegration: true
         }
@@ -73,7 +73,7 @@ function createWindow() {
     mainWindow.loadFile('index.html')
 
     // Open the DevTools.
-    mainWindow.webContents.openDevTools()
+    //mainWindow.webContents.openDevTools()
 
     // Emitted when the window is closed.
     mainWindow.on('closed', function () {
@@ -83,7 +83,7 @@ function createWindow() {
         mainWindow = null
     })
     //let appIcon = require('electron').nativeImage.createFromPath('./icon/app.png')
-    tray = new Tray('./icon/app.png')
+    tray = new Tray('./resources/app/icon/app.png')
     let contextMenu = Menu.buildFromTemplate([
         {
             label: '设置', click: () => {
@@ -157,17 +157,19 @@ ipcMain.on('download', function () {
     download = new BrowserWindow({
         parent: mainWindow, modal: true, show: false, frame: false, width: 300, height: 600,
         resizable: false,
-        icon: './icon/app.png'
+        icon: './resources/app/icon/icon.png'
     })
     download.loadFile('./filelist.html')
     download.once('ready-to-show', () => {
         download.show()
     })
-    download.webContents.openDevTools()
+    //download.webContents.openDevTools()
 })
 
 // 加载界面
-ipcMain.on('loading', function () {
+ipcMain.on('loading', createLoading)
+
+function createLoading() {
     loading = new BrowserWindow({
         parent: mainWindow, modal: true, show: false, frame: false, width: 400, height: 400,
         resizable: false, transparent: true
@@ -176,21 +178,30 @@ ipcMain.on('loading', function () {
     loading.once('ready-to-show', () => {
         loading.show()
     })
-})
+}
 
 ipcMain.on('load-close', function () {
     loading.destroy()
+})
+
+ipcMain.on('runExec', function (event) {
+    // createLoading()
+    // runExec()
+    // while (workerProcess === null || workerProcess === undefined) {
+    // }
+    event.sender.send('websocket')
+    //loading.destroy()
 })
 
 function setting() {
     setwin = new BrowserWindow({
         parent: mainWindow, modal: true, show: false, frame: false, width: 550, height: 280,
         resizable: false,
-        icon: './icon/app.png'
+        icon: './resources/app/icon/icon.png'
     })
     setwin.loadFile('./setting.html')
     setwin.once('ready-to-show', () => {
         setwin.show()
     })
-    setwin.webContents.openDevTools()
+    //setwin.webContents.openDevTools()
 }

@@ -84,7 +84,6 @@ func (d *Downloader) Init() {
 			if task.Status == common.INCOMPLETE {
 				task.Status = Paused
 				d.ActiveTaskMap[task.Id] = task
-				atomic.AddInt32(&Download.activeTaskNum, 1)
 			}
 			if task.Status == common.SUCCESS {
 				task.client = nil
@@ -94,7 +93,6 @@ func (d *Downloader) Init() {
 			if task.Status == common.ERRORED {
 				task.Status = Errored
 				d.ActiveTaskMap[task.Id] = task
-				atomic.AddInt32(&Download.activeTaskNum, 1)
 			}
 			<-quit
 		}
@@ -105,15 +103,14 @@ func (d *Downloader) Init() {
 func (d *Downloader) AddTask(fileInfo common.FileInfo, client *http.Client) (string, error) {
 	Download.mapLock.Lock()
 	defer Download.mapLock.Unlock()
-	if common.FileExist(fileInfo.SavePath + fileInfo.FileName) {
-		_ = os.Remove(fileInfo.SavePath + fileInfo.FileName)
-	}
-	// 创建文件
-	file, err := os.OpenFile(fileInfo.SavePath+fileInfo.FileName, os.O_CREATE, 0644)
-	if err != nil {
-		return "", err
-	}
-	_ = file.Close()
+	//if !common.FileExist(fileInfo.SavePath + fileInfo.FileName) {
+	//	// 创建文件
+	//	file, err := os.OpenFile(fileInfo.SavePath+fileInfo.FileName, os.O_CREATE, 0644)
+	//	if err != nil {
+	//		return "", err
+	//	}
+	//	_ = file.Close()
+	//}
 	// 创建任务
 	task := &Task{
 		Id:         uuid.NewV4().String(),
@@ -126,8 +123,10 @@ func (d *Downloader) AddTask(fileInfo common.FileInfo, client *http.Client) (str
 		client:     client,
 		Conn:       nil,
 	}
+	common.DBLock.Lock()
 	_, _ = common.TaskInsert.Exec(task.Id, task.renewal, common.INCOMPLETE, task.FileLength, task.finalLink, task.FileName, task.SavePath)
-	png, _ := os.OpenFile("./tmp/"+task.Id+".png", os.O_CREATE, 0644)
+	common.DBLock.Unlock()
+	png, _ := os.OpenFile("./resources/app/tmp/"+task.Id+".png", os.O_CREATE, 0644)
 	_ = png.Close()
 	// 添加任务
 	Download.ActiveTaskMap[task.Id] = task
@@ -137,8 +136,6 @@ func (d *Downloader) AddTask(fileInfo common.FileInfo, client *http.Client) (str
 		TaskId: task.Id,
 		Enum:   Schedule,
 	}
-	// 维护任务列表
-	atomic.AddInt32(&Download.activeTaskNum, 1)
 	return task.Id, nil
 }
 
@@ -172,20 +169,26 @@ func (d *Downloader) ResumeTask(id string) {
 		Enum:   Schedule,
 	}
 	task.Status = Waiting
+	common.DBLock.Lock()
 	_, _ = common.TaskUpdate.Exec(common.INCOMPLETE, task.Id)
+	common.DBLock.Unlock()
 }
 
 // 取消任务
 func (d *Downloader) CancelTask(id string) {
 	Download.mapLock.Lock()
 	defer Download.mapLock.Unlock()
-	_ = os.Remove("./tmp/" + id + ".png")
+	_ = os.Remove("./resources/app/tmp/" + id + ".png")
 	task, ok := Download.ActiveTaskMap[id]
 	if !ok {
 		return
 	}
+	common.DBLock.Lock()
 	_, _ = common.TaskDelete.Exec(task.Id)
+	common.DBLock.Unlock()
+	common.DBLock.Lock()
 	_, _ = common.SegDelete.Exec(task.Id)
+	common.DBLock.Unlock()
 	_ = os.Remove(task.SavePath)
 	if len(task.bts) != 0 {
 		close(task.btCancel)
@@ -197,6 +200,8 @@ func (d *Downloader) CancelTask(id string) {
 
 // 任务完成
 func (d *Downloader) successTask(id string) {
+	// 维护任务列表
+	atomic.AddInt32(&Download.activeTaskNum, -1)
 	Download.mapLock.Lock()
 	defer Download.mapLock.Unlock()
 	task, _ := Download.ActiveTaskMap[id]
@@ -206,8 +211,12 @@ func (d *Downloader) successTask(id string) {
 	task.file = nil
 	fmt.Printf("退出任务:%s", id)
 	Download.CompleteTaskMap[id] = task
+	common.DBLock.Lock()
 	_, _ = common.TaskUpdate.Exec(common.SUCCESS, task.Id)
+	common.DBLock.Unlock()
+	common.DBLock.Lock()
 	_, _ = common.SegDelete.Exec(task.Id)
+	common.DBLock.Unlock()
 }
 
 // 打开文件
@@ -229,13 +238,17 @@ func (d *Downloader) openTask(id string) {
 
 // 删除已完成任务
 func (d *Downloader) RemoveTask(id string) {
-	_ = os.Remove("./tmp/" + id + ".png")
+	_ = os.Remove("./resources/app/tmp/" + id + ".png")
 	task, ok := Download.CompleteTaskMap[id]
 	if !ok {
 		return
 	}
+	common.DBLock.Lock()
 	_, _ = common.TaskDelete.Exec(task.Id)
+	common.DBLock.Unlock()
+	common.DBLock.Lock()
 	_, _ = common.SegDelete.Exec(task.Id)
+	common.DBLock.Unlock()
 	delete(Download.CompleteTaskMap, task.Id)
 }
 
@@ -249,8 +262,11 @@ func (d *Downloader) Schedule() {
 		}
 		err := task.Start()
 		if err != nil {
+			d.TaskQueue.Enqueue(id)
 			return
 		}
+		// 维护任务列表
+		atomic.AddInt32(&Download.activeTaskNum, 1)
 	}
 }
 

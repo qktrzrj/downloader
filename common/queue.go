@@ -53,7 +53,7 @@ func (q *ItemQueue) Size() int {
 }
 
 func (q *ItemQueue) Contains(t Item) (int, bool) {
-	for i := len(q.items); i >= 0; i-- {
+	for i := len(q.items)-1; i >= 0; i-- {
 		if q.items[i] == t {
 			return i, true
 		}
