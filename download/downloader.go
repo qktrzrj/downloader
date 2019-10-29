@@ -62,14 +62,14 @@ func (d *Downloader) Init() {
 	taskQueue := &common.ItemQueue{}
 	d.TaskQueue = taskQueue.New()
 	// 查询任务
-	taskrow, err := common.DB.Query("select * from task")
+	taskrow, err := common.TaskDB.Query("select * from task")
 	if err == nil {
 		for taskrow.Next() {
 			task := &Task{client: common.NewClient()}
 			_ = taskrow.Scan(&task.Id, &task.renewal, &task.Status, &task.FileLength, &task.finalLink, &task.FileName, &task.SavePath)
 			quit := make(chan struct{})
 			go func(id string) {
-				segrow, err := common.DB.Query("select * from segment where task_id =?", id)
+				segrow, err := common.SegDB.Query("select * from segment where task_id =?", id)
 				if err == nil {
 					for segrow.Next() {
 						segment := &SegMent{}
@@ -103,14 +103,15 @@ func (d *Downloader) Init() {
 func (d *Downloader) AddTask(fileInfo common.FileInfo, client *http.Client) (string, error) {
 	Download.mapLock.Lock()
 	defer Download.mapLock.Unlock()
-	//if !common.FileExist(fileInfo.SavePath + fileInfo.FileName) {
-	//	// 创建文件
-	//	file, err := os.OpenFile(fileInfo.SavePath+fileInfo.FileName, os.O_CREATE, 0644)
-	//	if err != nil {
-	//		return "", err
-	//	}
-	//	_ = file.Close()
-	//}
+	if common.FileExist(fileInfo.SavePath + fileInfo.FileName) {
+		_ = os.Remove(fileInfo.SavePath + fileInfo.FileName)
+	}
+	// 创建文件
+	file, err := os.OpenFile(fileInfo.SavePath+fileInfo.FileName, os.O_CREATE, 0644)
+	if err != nil {
+		return "", err
+	}
+	_ = file.Close()
 	// 创建任务
 	task := &Task{
 		Id:         uuid.NewV4().String(),
@@ -123,9 +124,7 @@ func (d *Downloader) AddTask(fileInfo common.FileInfo, client *http.Client) (str
 		client:     client,
 		Conn:       nil,
 	}
-	common.DBLock.Lock()
-	_, _ = common.TaskInsert.Exec(task.Id, task.renewal, common.INCOMPLETE, task.FileLength, task.finalLink, task.FileName, task.SavePath)
-	common.DBLock.Unlock()
+	go common.InsertTask(task.Id, task.renewal, common.INCOMPLETE, task.FileLength, task.finalLink, task.FileName, task.SavePath)
 	png, _ := os.OpenFile("./resources/app/tmp/"+task.Id+".png", os.O_CREATE, 0644)
 	_ = png.Close()
 	// 添加任务
@@ -169,9 +168,7 @@ func (d *Downloader) ResumeTask(id string) {
 		Enum:   Schedule,
 	}
 	task.Status = Waiting
-	common.DBLock.Lock()
-	_, _ = common.TaskUpdate.Exec(common.INCOMPLETE, task.Id)
-	common.DBLock.Unlock()
+	go common.UpdateTask(common.INCOMPLETE, task.Id)
 }
 
 // 取消任务
@@ -183,14 +180,10 @@ func (d *Downloader) CancelTask(id string) {
 	if !ok {
 		return
 	}
-	common.DBLock.Lock()
-	_, _ = common.TaskDelete.Exec(task.Id)
-	common.DBLock.Unlock()
-	common.DBLock.Lock()
-	_, _ = common.SegDelete.Exec(task.Id)
-	common.DBLock.Unlock()
+	go common.DeleteTask(task.Id)
+	go common.DeleteSeg(task.Id)
 	_ = os.Remove(task.SavePath)
-	if len(task.bts) != 0 {
+	if len(task.bts) != 0 && task.Status != Paused {
 		close(task.btCancel)
 	}
 	task.file = nil
@@ -211,12 +204,8 @@ func (d *Downloader) successTask(id string) {
 	task.file = nil
 	fmt.Printf("退出任务:%s", id)
 	Download.CompleteTaskMap[id] = task
-	common.DBLock.Lock()
-	_, _ = common.TaskUpdate.Exec(common.SUCCESS, task.Id)
-	common.DBLock.Unlock()
-	common.DBLock.Lock()
-	_, _ = common.SegDelete.Exec(task.Id)
-	common.DBLock.Unlock()
+	go common.UpdateTask(common.SUCCESS, task.Id)
+	go common.DeleteSeg(task.Id)
 }
 
 // 打开文件
@@ -243,12 +232,8 @@ func (d *Downloader) RemoveTask(id string) {
 	if !ok {
 		return
 	}
-	common.DBLock.Lock()
-	_, _ = common.TaskDelete.Exec(task.Id)
-	common.DBLock.Unlock()
-	common.DBLock.Lock()
-	_, _ = common.SegDelete.Exec(task.Id)
-	common.DBLock.Unlock()
+	go common.DeleteTask(task.Id)
+	go common.DeleteSeg(task.Id)
 	delete(Download.CompleteTaskMap, task.Id)
 }
 

@@ -28,16 +28,13 @@ func mainUI(c *gin.Context) {
 	}
 	Conn = conn
 	Conn.SetCloseHandler(func(code int, text string) error {
-		common.DBLock.Lock()
-		_ = common.DB.Close()
-		common.DBLock.Unlock()
 		download.Download.BeforeExit()
-		time.Sleep(time.Second)
+		time.Sleep(time.Second * 3)
 		log.Fatal("主动断开链接")
 		return nil
 	})
 	var html string
-	row, err := common.DB.Query("select * from ui")
+	row, err := common.UiDB.Query("select * from ui")
 	if err == nil {
 		if row.Next() {
 			err = row.Scan(&html)

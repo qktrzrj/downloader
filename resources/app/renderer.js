@@ -1,5 +1,10 @@
 let ipcRenderer = require('electron').ipcRenderer
 const {remote} = require('electron')
+const log = require('electron-log');
+log.transports.console.level = false;
+log.transports.file.file = "./data/log/log.log";
+log.transports.console.level = 'silly';
+
 const app = remote.app
 
 let zoom = document.getElementById('zoom')
@@ -25,7 +30,7 @@ ipcRenderer.once('websocket', function () {
     ws = new WebSocket("ws://localhost:4800/main")
     //连接打开时触发
     ws.onopen = function (evt) {
-        console.log("Connection open ...")
+        log.info("Connection open ...")
     }
 
     ws.onmessage = function (evt) {
@@ -34,7 +39,7 @@ ipcRenderer.once('websocket', function () {
         try {
             data = JSON.parse(evt.data)
         } catch (e) {
-            console.log("json parse err:" + e)
+            log.error("json parse err:" + e)
             err = true
         }
         if (err === true) {
@@ -99,17 +104,17 @@ function connect(id) {
     let op = document.getElementById(id + 'item-op')
     //连接打开时触发
     socket[id].onopen = function (evt) {
-        console.log("Connection open ...")
+        log.info("Connection open ...")
     }
     //接收到消息时触发
     socket[id].onmessage = function (evt) {
-        console.log("Received Message: " + evt.data)
+        log.info("Received Message: " + evt.data)
         let err = false
         let data
         try {
             data = JSON.parse(evt.data)
         } catch (e) {
-            console.log("json parse err:" + e)
+            log.info("json parse err:" + e)
             err = true
         }
         if (err === true) {
@@ -178,7 +183,7 @@ function connect(id) {
             state.innerText = 'Errored'
             saveUI()
         }
-        console.log(error);
+        log.error(error);
     }
 }
 
@@ -263,6 +268,7 @@ function additem(id, name, size) {
     del.src = 'icon/delete.png'
     itemdiv.appendChild(del)
     countuner()
+    saveUI()
 }
 
 
@@ -472,7 +478,7 @@ function getFileIcon(id, op) {
         writerStream.end();  //标记文件末尾  结束写入流，释放资源
         writerStream.on('finish', function () {
             op.src = './tmp/' + id + '.png'
-            console.log("写入完成。");
+            log.info("写入完成。");
         });
         writerStream.on('error', function (error) {
             op.src = './icon/unkown.png'
@@ -545,7 +551,7 @@ function saveUI() {
             'Content-Type': 'application/json'
         })
     }).catch(function (error) {
-        console.log(error)
+        log.info(error)
     })
 }
 

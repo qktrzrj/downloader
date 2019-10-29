@@ -67,11 +67,6 @@ func saveUI(c *gin.Context) {
 	var html string
 	err := c.BindJSON(&html)
 	if err == nil {
-		common.DBLock.Lock()
-		_, err = common.DB.Exec("delete from ui")
-		common.DBLock.Unlock()
-		common.DBLock.Lock()
-		_, err = common.UIInsert.Exec(html)
-		common.DBLock.Unlock()
+		go common.UpdateUI(html)
 	}
 }

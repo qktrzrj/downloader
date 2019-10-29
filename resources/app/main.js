@@ -1,5 +1,9 @@
 // Modules to control application life and create native browser window
 const {app, BrowserWindow, Tray, Menu} = require('electron')
+const log = require('electron-log');
+log.transports.console.level = false;
+log.transports.file.file = "./data/log/log.log";
+log.transports.console.level = 'silly';
 
 // Keep a global reference of the window object, if you don't, the window will
 // be closed automatically when the JavaScript object is garbage collected.
@@ -18,25 +22,29 @@ let cmdStr = 'dl.exe'
 let cmdPath = ''
 // 子进程名称
 let workerProcess
+let workerStart = false
 
-function runExec() {
+function runExec(event) {
     // 执行命令行，如果命令不需要路径，或就是项目根目录，则不需要cwd参数：
     workerProcess = exec(cmdStr)//, {cwd: cmdPath})
     // 不受child_process默认的缓冲区大小的使用方法，没参数也要写上{}：workerProcess = exec(cmdStr, {})
 
     // 打印正常的后台可执行程序输出
     workerProcess.stdout.on('data', function (data) {
-        console.log('stdout: ' + data);
+        log.info('stdout: ' + data);
+        if (!workerStart) {
+            event.sender.send('websocket')
+        }
     });
 
     // 打印错误的后台可执行程序输出
     workerProcess.stderr.on('data', function (data) {
-        console.log('stderr: ' + data);
+        log.error('stderr: ' + data);
     });
 
     // 退出之后的输出
     workerProcess.on('close', function (code) {
-        console.log('out code：' + code);
+        log.info('out code：' + code);
         app.quit()
     })
 }
@@ -185,12 +193,10 @@ ipcMain.on('load-close', function () {
 })
 
 ipcMain.on('runExec', function (event) {
-    // createLoading()
-    // runExec()
-    // while (workerProcess === null || workerProcess === undefined) {
-    // }
+    createLoading()
+    //runExec(event)
     event.sender.send('websocket')
-    //loading.destroy()
+    loading.destroy()
 })
 
 function setting() {

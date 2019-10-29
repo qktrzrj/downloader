@@ -7,12 +7,15 @@
   ],
   "main": "./main.js",
   "version": "1.0.0",
-  "author": "yan",
+  "author": "yunyan",
   "scripts": {
+    "pack": "electron-builder --dir",
+    "dist": "electron-builder",
+    "start": "electron .",
     "package": "electron-packager . downloader --platform=win32 --out Downloader --arch=x64 --electron-version=7.0.0 --overwrite --ignore=node_modules --ignore=.gitignore"
   },
   "dependencies": {
-    "electron-squirrel-startup": "^1.0.0"
+    "electron-log": "^3.0.8"
   },
   "devDependencies": {
     "electron": "7.0.0",
@@ -20,8 +23,6 @@
   },
   "build": {
     "appId": "online.yinyan.www",
-    "win": {
-      "icon": "./icon/app.ico"
-    }
+    "win": {}
   }
 }

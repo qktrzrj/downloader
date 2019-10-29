@@ -1,7 +1,6 @@
 package main
 
 import (
-	"database/sql"
 	"downloader/common"
 	"downloader/download"
 	"downloader/routers"
@@ -15,7 +14,6 @@ import (
 
 func main() {
 	//url := "https://download.jetbrains.8686c.com/idea/ideaIC-2019.2.2.dmg"
-	common.DB, _ = sql.Open("sqlite3", "data/downloader.db")
 	download.Download = download.Downloader{
 		MaxRoutineNum:    common.RoutineNum,
 		SegSize:          common.SegSize,

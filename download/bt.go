@@ -73,8 +73,18 @@ func (bt *bt) downSeg(segment *SegMent, timer *time.Timer) (err error) {
 	reader := bufio.NewReaderSize(response.Body, 1024)
 	buf := bt.task.BufferPool.Get().(*bytes.Buffer)
 	defer func() {
+		if buf.Len() > 0 {
+			writeErr := bt.task.writeToDisk(segment, buf)
+			if writeErr != nil {
+				err = writeErr
+			}
+		}
 		buf.Reset()
 		bt.task.BufferPool.Put(buf)
+		errNew := bt.task.putSeg(segment)
+		if err == nil {
+			err = errNew
+		}
 	}()
 	stream := make([]byte, 1024)
 	buffLeft := 0

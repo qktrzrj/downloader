@@ -130,10 +130,14 @@ func (task *Task) Start() error {
 		task.btControl = int32(routine)
 		for i := 0; i < routine; i++ {
 			//task.btLock.Lock()
+			request, err := common.GetRequest(task.finalLink)
+			if err != nil {
+				continue
+			}
 			task.bts[i] = &bt{
 				id:      i,
 				task:    task,
-				request: common.GetRequest(task.finalLink),
+				request: request,
 			}
 			go func(bt *bt) {
 				bt.start()
@@ -145,9 +149,7 @@ func (task *Task) Start() error {
 						log.Println(fmt.Sprintf("任务:%s 暂停成功！", task.Id))
 					}
 					if task.Status == Errored {
-						common.DBLock.Lock()
-						_, _ = common.TaskUpdate.Exec(common.ERRORED, task.Id)
-						common.DBLock.Unlock()
+						go common.UpdateTask(common.ERRORED, task.Id)
 						log.Println(fmt.Sprintf("任务:%s 下载失败！", task.Id))
 					}
 					if task.Status == Downloading {
@@ -174,10 +176,13 @@ func (task *Task) Exit() {
 	if len(task.bts) != 0 {
 		close(task.btCancel)
 	}
-	close(task.speedCountChan)
+	if task.speedCountChan != nil {
+		close(task.speedCountChan)
+	}
 	if task.Conn != nil {
 		_ = task.Conn.Close()
 	}
+	time.Sleep(3 * time.Second)
 	_ = task.file.Close()
 }
 
@@ -244,7 +249,11 @@ func (task *Task) segErr(segment *SegMent) {
 
 // 写入文件
 func (task *Task) writeToDisk(segment *SegMent, buffer *bytes.Buffer) (err error) {
-	_, err = task.file.Seek(segment.finish, io.SeekStart)
+	seek := segment.finish + 1
+	if segment.finish == segment.start {
+		seek = segment.start
+	}
+	_, err = task.file.Seek(seek, io.SeekStart)
 	if err != nil {
 		return err
 	}
@@ -257,27 +266,33 @@ func (task *Task) writeToDisk(segment *SegMent, buffer *bytes.Buffer) (err error
 	if err != nil {
 		return
 	}
-	segment.finish = segment.start + l - 1 // 片段写入磁盘偏移量
-	seg := &SegMent{
-		start:  segment.start,
-		end:    segment.finish,
-		finish: segment.finish,
-	}
-	if segment.finish != segment.end && task.renewal && segment.end > 0 {
-		segment.start = segment.finish + 1
-		task.segErr(segment)
-	}
+	segment.finish = seek + l - 1 // 片段写入磁盘偏移量
 	task.file.Sync()
-	if !task.renewal {
-		return
-	}
-	task.completedLock.Lock()
-	task.completed = append(task.completed, seg)
-	common.DBLock.Lock()
-	_, _ = common.SegInsert.Exec(task.Id, seg.start, seg.end, seg.finish)
-	common.DBLock.Unlock()
-	task.completedLock.Unlock()
 	return
+}
+
+func (task *Task) putSeg(segment *SegMent) error {
+	if segment.finish < segment.end {
+		if !task.renewal {
+			return errors.New("下载出错")
+		}
+		seg1 := &SegMent{
+			start:  segment.start,
+			end:    segment.finish,
+			finish: segment.finish,
+		}
+		seg2 := &SegMent{
+			start:  segment.finish + 1,
+			end:    segment.end,
+			finish: segment.finish + 1,
+		}
+		go task.segErr(seg2)
+		go common.InsertSeg(task.Id, seg1.start, seg1.end, seg1.finish)
+		task.completedLock.Lock()
+		task.completed = append(task.completed, seg1)
+		task.completedLock.Unlock()
+	}
+	return nil
 }
 
 // 除去指定长度段的segment

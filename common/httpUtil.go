@@ -36,15 +36,17 @@ func NewClient() *http.Client {
 }
 
 // 重定向获取最终链接
-func redirect(url string, client *http.Client) string {
+func redirect(url string, client *http.Client) (string, error) {
 	finalLink := ""
-	req := GetRequest(url)
+	req, err := GetRequest(url)
+	if err != nil {
+		return "", err
+	}
 	for {
 		resp, err := client.Do(req)
 		if err != nil {
-			return url
+			return url, nil
 		}
-		defer resp.Body.Close()
 		//if resp.StatusCode != 302 {
 		//	return url
 		//}
@@ -54,28 +56,24 @@ func redirect(url string, client *http.Client) string {
 		}
 		if finalLink != "" {
 			url = finalLink
-			_ = req.Body.Close()
-			req = GetRequest(url)
 			continue
 		}
-		return url
+		resp.Body.Close()
+		return url, nil
 	}
 }
 
 // 请求目标文件任务信息
 func GetFileInfo(finalLink string, client *http.Client) (fileInfo FileInfo, err error) {
-	req := GetRequest(finalLink)
+	req, err := GetRequest(finalLink)
+	if err != nil {
+		return fileInfo, fmt.Errorf("获取请求失败: %w", err)
+	}
 	resp, err := client.Do(req)
 	if err != nil {
 		return fileInfo, fmt.Errorf("请求目标文件信息失败: %w", err)
 	}
 	defer resp.Body.Close()
-	if resp.StatusCode == http.StatusForbidden {
-		resp, err = client.Get(finalLink)
-		if err != nil {
-			return fileInfo, fmt.Errorf("请求目标文件信息失败: %w", err)
-		}
-	}
 	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusPartialContent {
 		return fileInfo, fmt.Errorf("请求目标文件信息失败: %d", resp.StatusCode)
 	}
@@ -99,11 +97,15 @@ func GetFileInfo(finalLink string, client *http.Client) (fileInfo FileInfo, err 
 	return
 }
 
-func GetRequest(url string) *http.Request {
-	request, _ := http.NewRequest("GET", url, nil)
+func GetRequest(url string) (*http.Request, error) {
+	request, err := http.NewRequest("GET", url, nil)
+	if err != nil {
+		fmt.Println(err)
+		return nil, err
+	}
 	request.Header.Set("User-Agent", browser.Chrome())
 	request.Header.Set("Connection", "keep-alive")
-	return request
+	return request, nil
 }
 
 func getFileName_TypeInUrl(finalLink string, response *http.Response) (fileName string, fileType string) {
@@ -123,20 +125,24 @@ func getFileName_TypeInUrl(finalLink string, response *http.Response) (fileName 
 		}
 	}
 	if fileName == "" {
-		uri, _ := url.ParseRequestURI(finalLink)
-		fileName = path.Base(uri.Path)
-		//u := []byte(finalLink)
-		//s := strings.LastIndex(finalLink, "/")
-		//if s == -1 {
-		//	s = 0
-		//	fileName = string(u[s:])
-		//} else {
-		//	fileName = string(u[s+1:])
-		//	l := strings.LastIndex(fileName, "?")
-		//	if l != -1 {
-		//		fileName = fileName[:l]
-		//	}
-		//}
+		uri, err := url.ParseRequestURI(finalLink)
+		if err != nil {
+			fmt.Println(err)
+			u := []byte(finalLink)
+			s := strings.LastIndex(finalLink, "/")
+			if s == -1 {
+				s = 0
+				fileName = string(u[s:])
+			} else {
+				fileName = string(u[s+1:])
+				l := strings.LastIndex(fileName, "?")
+				if l != -1 {
+					fileName = fileName[:l]
+				}
+			}
+		} else {
+			fileName = path.Base(uri.Path)
+		}
 	}
 
 	fileType = Http_Cotent_Type[response.Header.Get("Content-Type")]

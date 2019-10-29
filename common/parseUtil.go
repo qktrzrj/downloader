@@ -10,8 +10,14 @@ import (
 func GetFileList(url string) (fileList []FileInfo, err error) {
 	client := NewClient()
 	defer client.CloseIdleConnections()
-	finalLink := redirect(url, client)
-	req := GetRequest(finalLink)
+	finalLink, err := redirect(url, client)
+	if err != nil {
+		return nil, fmt.Errorf("重定向失败: %w", err)
+	}
+	req, err := GetRequest(finalLink)
+	if err != nil {
+		return nil, fmt.Errorf("获取请求失败: %w", err)
+	}
 	resp, err := client.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("请求目标文件信息失败: %w", err)
